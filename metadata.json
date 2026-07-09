@@ -1,0 +1,8 @@
+{
+  "name": "Vocab của UyenUyen",
+  "description": "A vocabulary learning and practice web app with pastel green and cream vibes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

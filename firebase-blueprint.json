@@ -1,0 +1,76 @@
+{
+  "entities": {
+    "VocabItem": {
+      "title": "VocabItem",
+      "description": "A vocabulary item.",
+      "type": "object",
+      "properties": {
+        "word": { "type": "string" },
+        "ipa": { "type": "string" },
+        "wordType": { "type": "string" },
+        "meaning": { "type": "string" },
+        "definition": { "type": "string" },
+        "example": { "type": "string" },
+        "synonyms": { "type": "string" },
+        "antonyms": { "type": "string" },
+        "band": { "type": "string" },
+        "topic": { "type": "string" },
+        "status": { "type": "string", "enum": ["Storage", "Studying", "Completed"] },
+        "masteryLevel": { "type": "string", "enum": ["New", "Beginner", "Advanced", "Mastery"] },
+        "source": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "lastScore": { "type": "number" },
+        "timesChecked": { "type": "number" },
+        "ownerId": { "type": "string" }
+      },
+      "required": ["word", "ipa", "wordType", "meaning", "definition", "example", "synonyms", "antonyms", "band", "topic", "status", "masteryLevel", "source", "createdAt", "timesChecked", "ownerId"]
+    },
+    "QuizSession": {
+      "title": "QuizSession",
+      "description": "A quiz session.",
+      "type": "object",
+      "properties": {
+        "mode": { "type": "string", "enum": ["Vietnamese", "Foreign"] },
+        "questionCount": { "type": "number" },
+        "criteria": { 
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "score": { "type": "number" },
+        "submittedAt": { "type": "number" },
+        "savedAt": { "type": "number" },
+        "ownerId": { "type": "string" }
+      },
+      "required": ["mode", "questionCount", "criteria", "score", "ownerId"]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "User preferences.",
+      "type": "object",
+      "properties": {
+        "apiKey": { "type": "string" },
+        "defaultQuestions": { "type": "number" },
+        "defaultCriteria": { 
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "ownerId": { "type": "string" }
+      },
+      "required": ["apiKey", "defaultQuestions", "defaultCriteria", "ownerId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/vocabItems/{vocabItemId}": {
+      "schema": { "$ref": "#/entities/VocabItem" },
+      "description": "Vocabulary items for a user."
+    },
+    "/users/{userId}/quizSessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/QuizSession" },
+      "description": "Quiz sessions for a user."
+    },
+    "/users/{userId}/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/UserSettings" },
+      "description": "Settings for a user."
+    }
+  }
+}

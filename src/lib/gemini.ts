@@ -1,6 +1,8 @@
+import { normalizeBand } from './vocabUtils';
+
 const MODEL = "gemini-3.5-flash";
 
-type VocabPayload = {
+export type VocabPayload = {
   correctedWord?: string;
   word?: string;
   ipa?: string;
@@ -13,6 +15,10 @@ type VocabPayload = {
   band?: string;
   topic?: string;
 };
+
+const BAND_GUIDE = `Band must estimate vocabulary difficulty for IELTS learners, not essay score.
+Return band as a plain numeric string only, no word "Band". Use only one of these values: "3.0", "3.5", "4.0", "4.5", "5.0", "5.5", "6.0", "6.5", "7.0", "7.5", "8.0", "8.5", "9.0".
+Common A1-A2 words like apple, school, book: 3.0-4.0. B1 words: 4.5-5.5. B2 words: 6.0-6.5. C1-C2/academic words: 7.0-9.0.`;
 
 function requireApiKey(apiKey?: string) {
   if (!apiKey?.trim()) {
@@ -30,6 +36,18 @@ function parseJsonResponse(text: string) {
     .trim();
 
   return JSON.parse(cleaned);
+}
+
+function normalizeVocabPayload(item: VocabPayload): VocabPayload {
+  return {
+    ...item,
+    band: normalizeBand(item.band),
+  };
+}
+
+function normalizeVocabArray(data: unknown): VocabPayload[] {
+  if (!Array.isArray(data)) return [];
+  return data.map(item => normalizeVocabPayload(item || {}));
 }
 
 function extractInteractionText(payload: any) {
@@ -63,7 +81,7 @@ async function generateJson(apiKey: string | undefined, prompt: string) {
     body: JSON.stringify({
       model: MODEL,
       store: false,
-      input: `${prompt}\n\nReturn only valid JSON. Do not include markdown.`,
+      input: `${prompt}\n\n${BAND_GUIDE}\n\nReturn only valid JSON. Do not include markdown.`,
     }),
   });
 
@@ -96,11 +114,11 @@ Respond ONLY with a valid JSON object matching this structure:
   "example": "A short English example sentence",
   "synonyms": "comma-separated synonyms",
   "antonyms": "comma-separated antonyms",
-  "band": "IELTS band estimate (e.g., Band 5.5, Band 6)",
+  "band": "numeric IELTS vocabulary difficulty, e.g. 3.0, 5.5, 7.0",
   "topic": "General topic category"
 }`;
 
-  return generateJson(apiKey, prompt);
+  return normalizeVocabPayload(await generateJson(apiKey, prompt));
 }
 
 export async function processRawText(rawText: string, apiKey?: string): Promise<VocabPayload[]> {
@@ -117,7 +135,7 @@ Respond ONLY with a JSON array of objects matching this structure:
     "example": "A short English example sentence",
     "synonyms": "comma-separated synonyms",
     "antonyms": "comma-separated antonyms",
-    "band": "IELTS band estimate",
+    "band": "numeric IELTS vocabulary difficulty, e.g. 3.0, 5.5, 7.0",
     "topic": "General topic category"
   }
 ]
@@ -125,8 +143,7 @@ Respond ONLY with a JSON array of objects matching this structure:
 Text to process:
 "${rawText}"`;
 
-  const data = await generateJson(apiKey, prompt);
-  return Array.isArray(data) ? data : [];
+  return normalizeVocabArray(await generateJson(apiKey, prompt));
 }
 
 export async function extractVocabFromParagraph(paragraph: string, apiKey?: string): Promise<VocabPayload[]> {
@@ -144,7 +161,7 @@ Respond ONLY with a JSON array of objects matching this structure:
     "example": "An example sentence using the word",
     "synonyms": "comma-separated synonyms",
     "antonyms": "comma-separated antonyms",
-    "band": "IELTS band estimate",
+    "band": "numeric IELTS vocabulary difficulty, e.g. 3.0, 5.5, 7.0",
     "topic": "General topic category"
   }
 ]
@@ -152,8 +169,7 @@ Respond ONLY with a JSON array of objects matching this structure:
 Paragraph:
 "${paragraph}"`;
 
-  const data = await generateJson(apiKey, prompt);
-  return Array.isArray(data) ? data : [];
+  return normalizeVocabArray(await generateJson(apiKey, prompt));
 }
 
 export async function testGeminiConnection(apiKey?: string) {

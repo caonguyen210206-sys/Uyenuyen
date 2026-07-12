@@ -21,6 +21,7 @@ export default function App() {
   const [showGreeting, setShowGreeting] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [loginError, setLoginError] = useState('');
 
   useEffect(() => {
     const timer = setTimeout(() => setShowGreeting(false), 3000);
@@ -36,10 +37,20 @@ export default function App() {
   }, []);
 
   const handleLogin = async () => {
+    setLoginError('');
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login failed", error);
+      if (error?.code === 'auth/unauthorized-domain') {
+        setLoginError('Domain GitHub Pages chưa được cho phép trong Firebase Authentication. Hãy thêm caonguyen210206-sys.github.io vào Authorized domains.');
+      } else if (error?.code === 'auth/popup-blocked') {
+        setLoginError('Trình duyệt đã chặn cửa sổ đăng nhập. Hãy cho phép popup rồi thử lại.');
+      } else if (error?.code === 'auth/popup-closed-by-user') {
+        setLoginError('Cửa sổ đăng nhập đã bị đóng. Hãy thử đăng nhập lại nhé.');
+      } else {
+        setLoginError('Đăng nhập Google chưa thành công. Hãy thử lại hoặc kiểm tra cấu hình Firebase Authentication.');
+      }
     }
   };
 
@@ -60,6 +71,11 @@ export default function App() {
           </div>
           <h1 className="text-3xl font-extrabold text-gray-800 mb-4 font-sans">Đăng nhập nhé 🥰</h1>
           <p className="text-gray-500 mb-8 font-medium">Bắt đầu học từ vựng thôi nào!</p>
+          {loginError && (
+            <p className="text-sm text-red-500 bg-red-50 border border-red-100 rounded-2xl px-4 py-3 mb-5 font-medium">
+              {loginError}
+            </p>
+          )}
           <button 
             onClick={handleLogin}
             className="flex items-center justify-center gap-3 w-full px-6 py-4 bg-pink-500 hover:bg-pink-600 text-white font-bold rounded-2xl shadow-sm transition-colors active:scale-95"

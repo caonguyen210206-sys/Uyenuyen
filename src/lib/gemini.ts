@@ -1,4 +1,4 @@
-const MODEL = "gemini-1.5-flash";
+const MODEL = "gemini-3.5-flash";
 
 type VocabPayload = {
   correctedWord?: string;
@@ -32,28 +32,40 @@ function parseJsonResponse(text: string) {
   return JSON.parse(cleaned);
 }
 
+function extractInteractionText(payload: any) {
+  if (typeof payload?.output_text === "string") {
+    return payload.output_text;
+  }
+
+  const steps = Array.isArray(payload?.steps) ? payload.steps : [];
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const content = steps[i]?.content;
+    if (!Array.isArray(content)) continue;
+    const textParts = content
+      .map((part: any) => part?.text)
+      .filter((text: unknown) => typeof text === "string");
+    if (textParts.length > 0) {
+      return textParts.join("\n");
+    }
+  }
+
+  return "";
+}
+
 async function generateJson(apiKey: string | undefined, prompt: string) {
   const key = requireApiKey(apiKey);
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": key,
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [{ text: prompt }],
-          },
-        ],
-        generationConfig: {
-          responseMimeType: "application/json",
-        },
-      }),
-    }
-  );
+  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": key,
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      store: false,
+      input: `${prompt}\n\nReturn only valid JSON. Do not include markdown.`,
+    }),
+  });
 
   const payload = await response.json().catch(() => null);
 
@@ -62,7 +74,7 @@ async function generateJson(apiKey: string | undefined, prompt: string) {
     throw new Error(message);
   }
 
-  const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
+  const text = extractInteractionText(payload);
   if (!text) {
     throw new Error("Gemini không trả về dữ liệu.");
   }
@@ -74,7 +86,7 @@ export async function defineWord(word: string, apiKey?: string): Promise<VocabPa
   const prompt = `You are an expert English teacher. You are provided with a word: "${word}".
 If the word is misspelled, correct it to the most likely intended valid English word.
 Provide the definition of the word (or the corrected word) for a Vietnamese learner.
-Respond ONLY with a valid JSON object matching this structure (no markdown, no backticks, just raw JSON):
+Respond ONLY with a valid JSON object matching this structure:
 {
   "correctedWord": "The correct spelling of the word if there was a typo, otherwise the original word",
   "ipa": "phonetic transcription (e.g., /kɒn.fɪˈden.ʃəl/)",
@@ -94,7 +106,7 @@ Respond ONLY with a valid JSON object matching this structure (no markdown, no b
 export async function processRawText(rawText: string, apiKey?: string): Promise<VocabPayload[]> {
   const prompt = `You are an expert English teacher. The user has provided some unstructured raw text containing vocabulary items.
 Extract the vocabulary words and their details from the text. For any missing details, fill them in appropriately for a Vietnamese learner.
-Respond ONLY with a JSON array of objects matching this structure (no markdown, no backticks, just raw JSON):
+Respond ONLY with a JSON array of objects matching this structure:
 [
   {
     "word": "The English word",
@@ -121,7 +133,7 @@ export async function extractVocabFromParagraph(paragraph: string, apiKey?: stri
   const prompt = `You are an expert English teacher. The user has provided a paragraph.
 Identify the most useful, advanced, or important vocabulary words (up to 15 words) for an English learner from this paragraph.
 Extract these words and provide detailed definitions for a Vietnamese learner.
-Respond ONLY with a JSON array of objects matching this structure (no markdown, no backticks, just raw JSON):
+Respond ONLY with a JSON array of objects matching this structure:
 [
   {
     "word": "The English word",

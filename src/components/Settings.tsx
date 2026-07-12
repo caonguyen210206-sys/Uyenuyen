@@ -3,6 +3,7 @@ import { Save, Download, Upload, CheckCircle2, AlertCircle, LogOut } from 'lucid
 import { useVocab } from '../context/VocabContext';
 import { UserSettings } from '../types';
 import { auth, signOut } from '../lib/firebase';
+import { testGeminiConnection } from '../lib/gemini';
 
 export default function Settings() {
   const { settings: globalSettings, updateSettings } = useVocab();
@@ -27,14 +28,10 @@ export default function Settings() {
   const handleTestConnection = async () => {
     setTestStatus('testing');
     try {
-      const res = await fetch('/api/define', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ word: 'hello', apiKey: settings.apiKey })
-      });
-      if (!res.ok) throw new Error('API request failed');
+      await testGeminiConnection(settings.apiKey);
       setTestStatus('success');
     } catch (e) {
+      console.error(e);
       setTestStatus('error');
     }
   };
@@ -88,7 +85,7 @@ export default function Settings() {
                 </button>
               </div>
               <p className="text-sm text-gray-400 mt-2">
-                Required for the "Auto Define" feature. Leave blank to use server-side default if available.
+                Required for AI features on GitHub Pages. Paste your Gemini API key, then save settings.
               </p>
               {testStatus === 'success' && <p className="text-sm font-bold text-green-500 flex items-center gap-1 mt-2"><CheckCircle2 size={16}/> Connection successful!</p>}
               {testStatus === 'error' && <p className="text-sm font-bold text-red-500 flex items-center gap-1 mt-2"><AlertCircle size={16}/> Connection failed. Please check your key.</p>}

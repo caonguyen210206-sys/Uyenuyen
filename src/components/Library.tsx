@@ -3,6 +3,7 @@ import { Plus, Trash2, Sparkles, BookOpen, X, Loader2 } from 'lucide-react';
 import { ViewState, VocabItem } from '../types';
 import { useVocab } from '../context/VocabContext';
 import { v4 as uuidv4 } from 'uuid';
+import { extractVocabFromParagraph, processRawText } from '../lib/gemini';
 
 interface LibraryProps {
   setCurrentView: (v: ViewState) => void;
@@ -54,21 +55,14 @@ export default function Library({ setCurrentView }: LibraryProps) {
     setIsProcessing(true);
     
     try {
-      const endpoint = aiModalMode === 'raw' ? '/api/process-raw' : '/api/extract-vocab';
-      const bodyPayload = aiModalMode === 'raw' ? { rawText: aiInputText, apiKey: settings.apiKey } : { paragraph: aiInputText, apiKey: settings.apiKey };
-      
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bodyPayload)
-      });
-      
-      if (!res.ok) throw new Error('API processing failed');
-      const data = await res.json();
+      const data = aiModalMode === 'raw'
+        ? await processRawText(aiInputText, settings.apiKey)
+        : await extractVocabFromParagraph(aiInputText, settings.apiKey);
       
       if (Array.isArray(data) && data.length > 0) {
         const newVocabItems: VocabItem[] = data.map(item => ({
           ...item,
+          word: item.word || item.correctedWord || '',
           id: uuidv4(),
           status: 'Storage',
           masteryLevel: 'New',
@@ -76,11 +70,15 @@ export default function Library({ setCurrentView }: LibraryProps) {
           createdAt: Date.now(),
           timesChecked: 0,
           ipa: item.ipa || '',
+          meaning: item.meaning || '',
           definition: item.definition || '',
           example: item.example || '',
           synonyms: item.synonyms || '',
           antonyms: item.antonyms || '',
           topic: item.topic || '',
+          wordType: item.wordType || '',
+          band: item.band || '',
+          ownerId: '',
         }));
         
         const updatedItems = [...items, ...newVocabItems];
@@ -94,11 +92,9 @@ export default function Library({ setCurrentView }: LibraryProps) {
         setAiModalMode('none');
         setAiInputText('');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert('Có lỗi xảy ra khi xử lý dữ liệu.');
-      setAiModalMode('none');
-      setAiInputText('');
+      alert(error?.message || 'Có lỗi xảy ra khi xử lý dữ liệu.');
     } finally {
       setIsProcessing(false);
     }

@@ -4,6 +4,7 @@ import { ViewState, VocabItem } from '../types';
 import { useVocab } from '../context/VocabContext';
 import { v4 as uuidv4 } from 'uuid';
 import { extractVocabFromParagraph, processRawText } from '../lib/gemini';
+import { formatBand, normalizeBand, normalizeWord } from '../lib/vocabUtils';
 
 interface LibraryProps {
   setCurrentView: (v: ViewState) => void;
@@ -60,33 +61,58 @@ export default function Library({ setCurrentView }: LibraryProps) {
         : await extractVocabFromParagraph(aiInputText, settings.apiKey);
       
       if (Array.isArray(data) && data.length > 0) {
-        const newVocabItems: VocabItem[] = data.map(item => ({
-          ...item,
-          word: item.word || item.correctedWord || '',
-          id: uuidv4(),
-          status: 'Storage',
-          masteryLevel: 'New',
-          source: aiModalMode === 'raw' ? 'AI Processed' : 'AI Extracted',
-          createdAt: Date.now(),
-          timesChecked: 0,
-          ipa: item.ipa || '',
-          meaning: item.meaning || '',
-          definition: item.definition || '',
-          example: item.example || '',
-          synonyms: item.synonyms || '',
-          antonyms: item.antonyms || '',
-          topic: item.topic || '',
-          wordType: item.wordType || '',
-          band: item.band || '',
-          ownerId: '',
-        }));
+        const existingWords = new Set(items.map(item => normalizeWord(item.word)));
+        const batchWords = new Set<string>();
+        const skippedWords: string[] = [];
+
+        const newVocabItems: VocabItem[] = data.reduce<VocabItem[]>((acc, item) => {
+          const word = item.word || item.correctedWord || '';
+          const normalized = normalizeWord(word);
+
+          if (!normalized) return acc;
+          if (existingWords.has(normalized) || batchWords.has(normalized)) {
+            skippedWords.push(word);
+            return acc;
+          }
+
+          batchWords.add(normalized);
+          acc.push({
+            ...item,
+            word,
+            id: uuidv4(),
+            status: 'Storage',
+            masteryLevel: 'New',
+            source: aiModalMode === 'raw' ? 'AI Processed' : 'AI Extracted',
+            createdAt: Date.now(),
+            timesChecked: 0,
+            ipa: item.ipa || '',
+            meaning: item.meaning || '',
+            definition: item.definition || '',
+            example: item.example || '',
+            synonyms: item.synonyms || '',
+            antonyms: item.antonyms || '',
+            topic: item.topic || '',
+            wordType: item.wordType || '',
+            band: normalizeBand(item.band),
+            ownerId: '',
+          });
+          return acc;
+        }, []);
         
-        const updatedItems = [...items, ...newVocabItems];
-        await updateVocabItems(updatedItems);
+        if (newVocabItems.length > 0) {
+          const updatedItems = [...items, ...newVocabItems];
+          await updateVocabItems(updatedItems);
+        }
+
+        if (skippedWords.length > 0) {
+          alert(`Đã bỏ qua ${skippedWords.length} từ trùng: ${skippedWords.slice(0, 8).join(', ')}${skippedWords.length > 8 ? '...' : ''}`);
+        }
         
         setAiModalMode('none');
         setAiInputText('');
-        setCurrentView('vocab-list');
+        if (newVocabItems.length > 0) {
+          setCurrentView('vocab-list');
+        }
       } else {
         alert('Không tìm thấy từ vựng nào trong đoạn văn bản.');
         setAiModalMode('none');
@@ -186,8 +212,8 @@ export default function Library({ setCurrentView }: LibraryProps) {
                   <td className="p-5 text-gray-600 font-medium">{item.meaning}</td>
                   <td className="p-5 text-gray-500 font-medium">{item.source || '-'}</td>
                   <td className="p-5">
-                    <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 font-bold text-sm">
-                      {item.band || '-'}
+                    <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 font-bold text-sm whitespace-nowrap">
+                      {formatBand(item.band)}
                     </span>
                   </td>
                   <td className="p-5 text-right">

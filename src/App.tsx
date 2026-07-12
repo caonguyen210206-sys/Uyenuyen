@@ -48,8 +48,12 @@ export default function App() {
         setLoginError('Trình duyệt đã chặn cửa sổ đăng nhập. Hãy cho phép popup rồi thử lại.');
       } else if (error?.code === 'auth/popup-closed-by-user') {
         setLoginError('Cửa sổ đăng nhập đã bị đóng. Hãy thử đăng nhập lại nhé.');
+      } else if (error?.code === 'auth/operation-not-allowed') {
+        setLoginError('Google Sign-in chưa được bật trong Firebase Authentication. Hãy bật Google ở Sign-in method.');
+      } else if (error?.code === 'auth/api-key-not-valid' || error?.code === 'auth/invalid-api-key') {
+        setLoginError('Firebase API key chưa đúng. Hãy kiểm tra lại config Firebase trong repo.');
       } else {
-        setLoginError('Đăng nhập Google chưa thành công. Hãy thử lại hoặc kiểm tra cấu hình Firebase Authentication.');
+        setLoginError(`Đăng nhập Google chưa thành công${error?.code ? ` (${error.code})` : ''}. ${error?.message || 'Hãy kiểm tra cấu hình Firebase Authentication.'}`);
       }
     }
   };

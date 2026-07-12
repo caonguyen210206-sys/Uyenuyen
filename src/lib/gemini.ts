@@ -17,8 +17,9 @@ export type VocabPayload = {
 };
 
 const BAND_GUIDE = `Band must estimate vocabulary difficulty for IELTS learners, not essay score.
-Return band as a plain numeric string only, no word "Band". Use only one of these values: "3.0", "3.5", "4.0", "4.5", "5.0", "5.5", "6.0", "6.5", "7.0", "7.5", "8.0", "8.5", "9.0".
-Common A1-A2 words like apple, school, book: 3.0-4.0. B1 words: 4.5-5.5. B2 words: 6.0-6.5. C1-C2/academic words: 7.0-9.0.`;
+For very common daily words such as apple, school, book, happy, big, good, return "Basic" instead of a number.
+For IELTS-level vocabulary, return a plain numeric string only, no word "Band". Use only one of these values: "5.0", "5.5", "6.0", "6.5", "7.0", "7.5", "8.0", "8.5", "9.0".
+B1 useful words: 5.0-5.5. B2 words: 6.0-6.5. C1-C2 or academic/formal words: 7.0-9.0.`;
 
 function requireApiKey(apiKey?: string) {
   if (!apiKey?.trim()) {
@@ -114,7 +115,7 @@ Respond ONLY with a valid JSON object matching this structure:
   "example": "A short English example sentence",
   "synonyms": "comma-separated synonyms",
   "antonyms": "comma-separated antonyms",
-  "band": "numeric IELTS vocabulary difficulty, e.g. 3.0, 5.5, 7.0",
+  "band": "Basic for very common words, or numeric IELTS vocabulary difficulty, e.g. 5.5, 7.0",
   "topic": "General topic category"
 }`;
 
@@ -135,7 +136,7 @@ Respond ONLY with a JSON array of objects matching this structure:
     "example": "A short English example sentence",
     "synonyms": "comma-separated synonyms",
     "antonyms": "comma-separated antonyms",
-    "band": "numeric IELTS vocabulary difficulty, e.g. 3.0, 5.5, 7.0",
+    "band": "Basic for very common words, or numeric IELTS vocabulary difficulty, e.g. 5.5, 7.0",
     "topic": "General topic category"
   }
 ]
@@ -161,7 +162,7 @@ Respond ONLY with a JSON array of objects matching this structure:
     "example": "An example sentence using the word",
     "synonyms": "comma-separated synonyms",
     "antonyms": "comma-separated antonyms",
-    "band": "numeric IELTS vocabulary difficulty, e.g. 3.0, 5.5, 7.0",
+    "band": "Basic for very common words, or numeric IELTS vocabulary difficulty, e.g. 5.5, 7.0",
     "topic": "General topic category"
   }
 ]

@@ -1,6 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
-
-const MODEL = "gemini-2.5-flash";
+const MODEL = "gemini-1.5-flash";
 
 type VocabPayload = {
   correctedWord?: string;
@@ -35,16 +33,35 @@ function parseJsonResponse(text: string) {
 }
 
 async function generateJson(apiKey: string | undefined, prompt: string) {
-  const ai = new GoogleGenAI({ apiKey: requireApiKey(apiKey) });
-  const response = await ai.models.generateContent({
-    model: MODEL,
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-    },
-  });
+  const key = requireApiKey(apiKey);
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(key)}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [{ text: prompt }],
+          },
+        ],
+        generationConfig: {
+          responseMimeType: "application/json",
+        },
+      }),
+    }
+  );
 
-  const text = response.text;
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message = payload?.error?.message || `Gemini API lỗi HTTP ${response.status}.`;
+    throw new Error(message);
+  }
+
+  const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) {
     throw new Error("Gemini không trả về dữ liệu.");
   }

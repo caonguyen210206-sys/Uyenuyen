@@ -4,6 +4,7 @@ import { VocabItem } from '../types';
 import { useVocab } from '../context/VocabContext';
 import { v4 as uuidv4 } from 'uuid';
 import { defineWord } from '../lib/gemini';
+import { formatBand, normalizeBand, normalizeWord } from '../lib/vocabUtils';
 
 export default function VocabList() {
   const { items, addVocabItem, updateVocabItems, settings } = useVocab();
@@ -12,24 +13,56 @@ export default function VocabList() {
   const [newWord, setNewWord] = useState('');
   const [isDefining, setIsDefining] = useState(false);
   const [formData, setFormData] = useState<Partial<VocabItem>>({});
-  const [filter, setFilter] = useState<'All' | 'Studying' | 'Completed'>('All');
+  const [filter, setFilter] = useState<'All' | 'Studying' | 'Completed' | string>('All');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [duplicateMessage, setDuplicateMessage] = useState('');
 
   const activeItems = items.filter(i => i.status !== 'Storage');
 
+  const findDuplicate = (word: string) => {
+    const normalized = normalizeWord(word);
+    if (!normalized) return undefined;
+    return items.find(item => normalizeWord(item.word) === normalized);
+  };
+
+  const resetAddModal = () => {
+    setShowAddModal(false);
+    setNewWord('');
+    setFormData({});
+    setDuplicateMessage('');
+  };
+
   const handleAutoDefine = async () => {
-    if (!newWord.trim()) return;
+    const wordToDefine = newWord.trim();
+    if (!wordToDefine) return;
+
+    const existingItem = findDuplicate(wordToDefine);
+    if (existingItem) {
+      setDuplicateMessage(`Từ "${existingItem.word}" đã có trong danh sách rồi, không cần define lại.`);
+      return;
+    }
+
+    setDuplicateMessage('');
     setIsDefining(true);
     try {
-      const data = await defineWord(newWord, settings.apiKey);
-      
-      if (data.correctedWord && data.correctedWord.toLowerCase() !== newWord.toLowerCase()) {
-        setNewWord(data.correctedWord);
+      const data = await defineWord(wordToDefine, settings.apiKey);
+      const correctedWord = data.correctedWord?.trim();
+      const finalWord = correctedWord || wordToDefine;
+
+      const correctedDuplicate = findDuplicate(finalWord);
+      if (correctedDuplicate) {
+        setNewWord(finalWord);
+        setDuplicateMessage(`Từ "${correctedDuplicate.word}" đã có trong danh sách rồi, không lưu thêm bản trùng.`);
       }
-      
+
+      if (correctedWord && normalizeWord(correctedWord) !== normalizeWord(wordToDefine)) {
+        setNewWord(correctedWord);
+      }
+
       setFormData({
         ...formData,
         ...data,
+        band: normalizeBand(data.band),
       });
     } catch (err: any) {
       console.error("Error auto defining:", err);
@@ -40,10 +73,18 @@ export default function VocabList() {
   };
 
   const handleSave = async () => {
-    if (!newWord.trim() || !formData.meaning) return;
+    const wordToSave = newWord.trim();
+    if (!wordToSave || !formData.meaning) return;
+
+    const existingItem = findDuplicate(wordToSave);
+    if (existingItem) {
+      setDuplicateMessage(`Không lưu được vì từ "${existingItem.word}" đã tồn tại trong danh sách.`);
+      return;
+    }
+
     const newItem: VocabItem = {
       id: uuidv4(),
-      word: newWord,
+      word: wordToSave,
       ipa: formData.ipa || '',
       wordType: formData.wordType || '',
       meaning: formData.meaning,
@@ -51,7 +92,7 @@ export default function VocabList() {
       example: formData.example || '',
       synonyms: formData.synonyms || '',
       antonyms: formData.antonyms || '',
-      band: formData.band || '',
+      band: normalizeBand(formData.band),
       topic: formData.topic || '',
       status: 'Studying',
       masteryLevel: 'New',
@@ -62,9 +103,7 @@ export default function VocabList() {
     };
     
     await addVocabItem(newItem);
-    setShowAddModal(false);
-    setNewWord('');
-    setFormData({});
+    resetAddModal();
   };
 
   const markLearned = async (id: string) => {
@@ -75,7 +114,7 @@ export default function VocabList() {
   const filterOptions = [
     'All', 'Studying', 'Completed',
     'Mastery: New', 'Mastery: Mastery',
-    'Band: N/A', 'Band: 6', 'Band: 6.5', 'Band: 7', 'Band: 7.5'
+    'Band: N/A', 'Band: 3.0', 'Band: 3.5', 'Band: 4.0', 'Band: 4.5', 'Band: 5.0', 'Band: 5.5', 'Band: 6.0', 'Band: 6.5', 'Band: 7.0', 'Band: 7.5', 'Band: 8.0', 'Band: 8.5', 'Band: 9.0'
   ];
 
   const filteredItems = activeItems.filter(i => {
@@ -84,9 +123,9 @@ export default function VocabList() {
     if (filter === 'Mastery: New') return i.masteryLevel === 'New' || !i.masteryLevel;
     if (filter === 'Mastery: Mastery') return i.masteryLevel === 'Mastery';
     if (filter.startsWith('Band: ')) {
-      const targetBand = filter.replace('Band: ', '').trim();
-      const itemBand = (i.band || 'N/A').replace('Band', '').trim();
-      if (targetBand === 'N/A') return itemBand === 'N/A' || itemBand === '';
+      const targetBand = normalizeBand(filter.replace('Band: ', '').trim());
+      const itemBand = normalizeBand(i.band);
+      if (targetBand === 'N/A' || !targetBand) return !itemBand;
       return itemBand === targetBand;
     }
     return true;
@@ -185,7 +224,7 @@ export default function VocabList() {
                   <td className="p-4 text-sm font-bold text-gray-500 italic">{item.wordType}</td>
                   <td className="p-4 font-semibold text-gray-700">{item.meaning}</td>
                   <td className="p-4 text-sm text-gray-500 max-w-xs truncate">{item.definition}</td>
-                  <td className="p-4"><span className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 font-bold text-xs">{item.band || '-'}</span></td>
+                  <td className="p-4"><span className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 font-bold text-xs whitespace-nowrap">{formatBand(item.band)}</span></td>
                   <td className="p-4">
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                       item.status === 'Completed' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'
@@ -208,6 +247,7 @@ export default function VocabList() {
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-gray-400 font-mono text-sm">{item.ipa}</span>
                     <span className="text-gray-400 text-sm italic font-bold">{item.wordType}</span>
+                    <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-bold text-xs whitespace-nowrap">{formatBand(item.band)}</span>
                   </div>
                 </div>
                 <button 
@@ -248,15 +288,18 @@ export default function VocabList() {
           <div className="bg-white rounded-[2.5rem] p-8 w-[600px] shadow-2xl max-h-[90vh] overflow-y-auto border-thin">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-2xl font-extrabold text-gray-800">Add New Word</h3>
-              <button onClick={() => setShowAddModal(false)} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors"><X size={20} /></button>
+              <button onClick={resetAddModal} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors"><X size={20} /></button>
             </div>
             
-            <div className="flex gap-3 mb-6">
+            <div className="flex gap-3 mb-3">
               <input 
                 type="text" 
                 placeholder="Enter a word..." 
                 value={newWord}
-                onChange={e => setNewWord(e.target.value)}
+                onChange={e => {
+                  setNewWord(e.target.value);
+                  setDuplicateMessage('');
+                }}
                 className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:border-[#4ADE80] focus:ring-2 focus:ring-[#4ADE80]/20 font-bold text-lg"
               />
               <button 
@@ -268,6 +311,12 @@ export default function VocabList() {
                 {isDefining ? 'Defining...' : 'Auto Define'}
               </button>
             </div>
+
+            {duplicateMessage && (
+              <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
+                {duplicateMessage}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div>
@@ -297,6 +346,14 @@ export default function VocabList() {
               <div>
                 <label className="block text-sm font-bold text-gray-500 mb-1">Antonyms</label>
                 <input value={formData.antonyms || ''} onChange={e => setFormData({...formData, antonyms: e.target.value})} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-500 mb-1">Band</label>
+                <input value={formData.band || ''} onChange={e => setFormData({...formData, band: normalizeBand(e.target.value)})} placeholder="6.0" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-500 mb-1">Topic</label>
+                <input value={formData.topic || ''} onChange={e => setFormData({...formData, topic: e.target.value})} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl" />
               </div>
             </div>
 

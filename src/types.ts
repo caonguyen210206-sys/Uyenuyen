@@ -3,6 +3,16 @@ export type ViewState = 'dashboard' | 'library' | 'vocab-list' | 'practice' | 'm
 export type VocabStatus = 'Storage' | 'Studying' | 'Completed';
 export type MasteryLevel = 'New' | 'Beginner' | 'Advanced' | 'Mastery';
 
+export interface MiniQuiz {
+  fillBlankQuestion: string;
+  fillBlankAnswer: string;
+  multipleChoiceQuestion: string;
+  multipleChoiceOptions: string[];
+  multipleChoiceAnswer: string;
+  rewritePrompt: string;
+  rewriteAnswer: string;
+}
+
 export interface VocabItem {
   id: string;
   word: string;
@@ -19,8 +29,10 @@ export interface VocabItem {
   masteryLevel: MasteryLevel;
   source: string;
   createdAt: number;
+  updatedAt?: number;
   lastScore?: number;
   timesChecked: number;
+  miniQuiz?: MiniQuiz;
   ownerId?: string;
 }
 

@@ -1,7 +1,8 @@
+import type { MiniQuiz, VocabItem } from '../types';
 import { normalizeBand, normalizeWord } from './vocabUtils';
 
 const MODEL = "gemini-3.5-flash";
-const CACHE_VERSION = "v4";
+const CACHE_VERSION = "v5";
 
 type VocabPayload = {
   correctedWord?: string;
@@ -15,6 +16,7 @@ type VocabPayload = {
   antonyms?: string;
   band?: string;
   topic?: string;
+  miniQuiz?: MiniQuiz;
 };
 
 const BAND_GUIDE = `Band estimates IELTS vocabulary difficulty, not essay score.
@@ -40,10 +42,33 @@ function parseJsonResponse(text: string) {
   return JSON.parse(cleaned);
 }
 
+function normalizeMiniQuiz(raw: any): MiniQuiz | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+
+  const options = Array.isArray(raw.multipleChoiceOptions)
+    ? raw.multipleChoiceOptions.map((option: unknown) => String(option || '').trim()).filter(Boolean).slice(0, 4)
+    : [];
+
+  const quiz: MiniQuiz = {
+    fillBlankQuestion: String(raw.fillBlankQuestion || '').trim(),
+    fillBlankAnswer: String(raw.fillBlankAnswer || '').trim(),
+    multipleChoiceQuestion: String(raw.multipleChoiceQuestion || '').trim(),
+    multipleChoiceOptions: options,
+    multipleChoiceAnswer: String(raw.multipleChoiceAnswer || '').trim(),
+    rewritePrompt: String(raw.rewritePrompt || '').trim(),
+    rewriteAnswer: String(raw.rewriteAnswer || '').trim(),
+  };
+
+  const hasUsefulContent = quiz.fillBlankQuestion || quiz.multipleChoiceQuestion || quiz.rewritePrompt;
+  return hasUsefulContent ? quiz : undefined;
+}
+
 function normalizeVocabPayload(item: VocabPayload): VocabPayload {
+  const miniQuiz = normalizeMiniQuiz(item.miniQuiz);
   return {
     ...item,
     band: normalizeBand(item.band),
+    ...(miniQuiz ? { miniQuiz } : {}),
   };
 }
 
@@ -142,9 +167,32 @@ async function generateJson(apiKey: string | undefined, prompt: string, cacheId?
 export async function defineWord(word: string, apiKey?: string): Promise<VocabPayload> {
   const prompt = `Define this English word for a Vietnamese IELTS learner: "${word}".
 If misspelled, fix it in correctedWord; otherwise correctedWord is the original word.
-Return one compact JSON object with exactly these fields: correctedWord, ipa, wordType, meaning, definition, example, synonyms, antonyms, band, topic.`;
+Return one compact JSON object with exactly these fields: correctedWord, ipa, wordType, meaning, definition, example, synonyms, antonyms, band, topic, miniQuiz.
+miniQuiz must be an object with exactly these fields:
+- fillBlankQuestion: one sentence with one blank shown as _____
+- fillBlankAnswer: the target word
+- multipleChoiceQuestion: a short question testing meaning or usage
+- multipleChoiceOptions: exactly 4 answer options
+- multipleChoiceAnswer: the correct option text
+- rewritePrompt: one Vietnamese or English prompt asking the learner to use the word in a new sentence
+- rewriteAnswer: one natural model answer.`;
 
   return normalizeVocabPayload(await generateJson(apiKey, prompt, cacheKey('define', word)));
+}
+
+export async function generateMiniQuiz(item: Pick<VocabItem, 'word' | 'meaning' | 'definition' | 'example' | 'wordType'>, apiKey?: string): Promise<MiniQuiz> {
+  const prompt = `Create a mini quiz for this English vocabulary item for a Vietnamese IELTS learner.
+Word: ${item.word}
+Meaning in Vietnamese: ${item.meaning}
+Definition: ${item.definition}
+Example: ${item.example}
+Word type: ${item.wordType}
+Return one JSON object with exactly these fields: fillBlankQuestion, fillBlankAnswer, multipleChoiceQuestion, multipleChoiceOptions, multipleChoiceAnswer, rewritePrompt, rewriteAnswer.
+multipleChoiceOptions must contain exactly 4 options. The correct answer must be included in multipleChoiceOptions.`;
+
+  const quiz = normalizeMiniQuiz(await generateJson(apiKey, prompt, cacheKey('mini-quiz', `${item.word}|${item.meaning}|${item.definition}`)));
+  if (!quiz) throw new Error('Gemini không tạo được mini quiz cho từ này.');
+  return quiz;
 }
 
 export async function processRawText(rawText: string, apiKey?: string): Promise<VocabPayload[]> {

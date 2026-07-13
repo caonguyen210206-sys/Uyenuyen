@@ -19,6 +19,73 @@ export default function Practice() {
 
   const activeItems = items.filter(i => i.status !== 'Storage');
 
+  const normalizeText = (value?: string) => {
+    return (value || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[’‘`]/g, "'")
+      .replace(/[^a-z0-9\s']/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
+  const splitAnswerOptions = (value?: string) => {
+    return (value || '')
+      .split(/[,;\/|\n]|\bor\b/gi)
+      .map(normalizeText)
+      .filter(Boolean);
+  };
+
+  const normalizeWordType = (value?: string) => {
+    const normalized = normalizeText(value);
+    if (!normalized) return '';
+    if (normalized.includes('pronoun') || normalized === 'pron') return 'pronoun';
+    if (normalized.includes('noun') || normalized === 'n') return 'noun';
+    if (normalized.includes('verb') || normalized === 'v') return 'verb';
+    if (normalized.includes('adjective') || normalized === 'adj') return 'adjective';
+    if (normalized.includes('adverb') || normalized === 'adv') return 'adverb';
+    if (normalized.includes('preposition') || normalized === 'prep') return 'preposition';
+    if (normalized.includes('conjunction') || normalized === 'conj') return 'conjunction';
+    if (normalized.includes('phrase') || normalized.includes('idiom') || normalized.includes('collocation')) return 'phrase';
+    return normalized;
+  };
+
+  const isWordTypeCorrect = (userAnswer?: string, correctAnswer?: string) => {
+    const userType = normalizeWordType(userAnswer);
+    const correctType = normalizeWordType(correctAnswer);
+    return Boolean(userType && correctType && userType === correctType);
+  };
+
+  const isExactOptionCorrect = (userAnswer?: string, correctAnswer?: string) => {
+    const user = normalizeText(userAnswer);
+    if (!user) return false;
+    const options = splitAnswerOptions(correctAnswer);
+    return options.some(option => user === option);
+  };
+
+  const isMeaningCorrect = (userAnswer?: string, correctAnswer?: string) => {
+    const user = normalizeText(userAnswer);
+    if (!user) return false;
+
+    const options = splitAnswerOptions(correctAnswer);
+    return options.some(option => {
+      if (user === option) return true;
+      // Allow harmless extra words, but avoid accepting extremely short fragments.
+      if (user.length >= 5 && option.includes(user)) return true;
+      if (option.length >= 5 && user.includes(option)) return true;
+      return false;
+    });
+  };
+
+  const isSynonymCorrect = (userAnswer?: string, correctAnswer?: string) => {
+    if (!userAnswer?.trim()) return true; // Synonym is useful practice, but optional.
+    const userOptions = splitAnswerOptions(userAnswer);
+    const correctOptions = splitAnswerOptions(correctAnswer);
+    if (correctOptions.length === 0) return true;
+    return userOptions.some(user => correctOptions.some(correct => user === correct));
+  };
+
   const prepareQuizSet = () => {
     if (activeItems.length === 0) return null;
     const shuffled = [...activeItems].sort(() => 0.5 - Math.random());
@@ -69,33 +136,13 @@ export default function Practice() {
   const submitQuiz = () => {
     let totalCorrect = 0;
     const evaluated = currentAnswers.map(ans => {
-      const isC1 = ans.c1_answer?.toLowerCase().trim() === ans.c1_correct?.toLowerCase().trim();
-      
-      let isC2 = false;
-      const userAnsC2 = ans.c2_answer?.toLowerCase().trim() || "";
-      const correctAnsC2 = ans.c2_correct?.toLowerCase().trim() || "";
-      
-      if (userAnsC2 === correctAnsC2) {
-        isC2 = true;
-      } else {
-        const possibleAnswers = correctAnsC2.split(/[,;\/]+/).map(s => s.trim()).filter(s => s);
-        if (possibleAnswers.includes(userAnsC2)) {
-          isC2 = true;
-        }
-      }
+      const isC1 = isWordTypeCorrect(ans.c1_answer, ans.c1_correct);
+      const isC2 = ans.c2_type === 'Word'
+        ? isExactOptionCorrect(ans.c2_answer, ans.c2_correct)
+        : isMeaningCorrect(ans.c2_answer, ans.c2_correct);
+      const isC3 = isSynonymCorrect(ans.c3_answer, ans.c3_correct);
 
-      let isC3 = true;
-      if (ans.c3_answer && ans.c3_correct) {
-        const userAnsC3 = ans.c3_answer.toLowerCase().trim();
-        const correctAnsC3 = ans.c3_correct.toLowerCase().trim();
-        if (userAnsC3 === correctAnsC3) {
-          isC3 = true;
-        } else {
-          const possibleAnswers = correctAnsC3.split(/[,;\/]+/).map(s => s.trim()).filter(s => s);
-          isC3 = possibleAnswers.includes(userAnsC3);
-        }
-      }
-      const isFull = isC1 && isC2;
+      const isFull = isC1 && isC2 && isC3;
       if (isFull) totalCorrect++;
       return {
         ...ans,
@@ -129,7 +176,7 @@ export default function Practice() {
         allItems[idx] = {
           ...allItems[idx],
           timesChecked: (allItems[idx].timesChecked || 0) + 1,
-          lastScore: (ans.c1_isCorrect && ans.c2_isCorrect) ? 100 : 0
+          lastScore: (ans.c1_isCorrect && ans.c2_isCorrect && ans.c3_isCorrect !== false) ? 100 : 0
         };
       }
     });
@@ -139,16 +186,18 @@ export default function Practice() {
     setCurrentAnswers([]);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, currentIdx: number, type: 'c1' | 'c2') => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, currentIdx: number, type: 'c1' | 'c2' | 'c3') => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      const nextInputId = type === 'c1' 
-        ? `input-c2-${currentIdx}` 
-        : `input-c1-${currentIdx + 1}`;
+      const nextInputId = type === 'c1'
+        ? `input-c2-${currentIdx}`
+        : type === 'c2'
+          ? `input-c3-${currentIdx}`
+          : `input-c1-${currentIdx + 1}`;
       const nextInput = document.getElementById(nextInputId);
       if (nextInput) {
         (nextInput as HTMLInputElement).focus();
-      } else if (type === 'c2' && currentIdx === currentAnswers.length - 1) {
+      } else if (type === 'c3' && currentIdx === currentAnswers.length - 1) {
         submitQuiz();
       }
     }
@@ -309,8 +358,9 @@ export default function Practice() {
                   <tr className="bg-gray-50/50 border-b border-gray-100 text-sm">
                     <th className="p-4 font-bold text-gray-500 w-12 text-center">No.</th>
                     <th className="p-4 font-bold text-gray-500 w-1/4">Question</th>
-                    <th className="p-4 font-bold text-gray-500">Your Answer (Type)</th>
-                    <th className="p-4 font-bold text-gray-500">Your Answer ({mode === 'Foreign' ? 'Word' : 'Meaning'})</th>
+                    <th className="p-4 font-bold text-gray-500">Type</th>
+                    <th className="p-4 font-bold text-gray-500">{mode === 'Foreign' ? 'Word' : 'Meaning'}</th>
+                    <th className="p-4 font-bold text-gray-500">Synonym <span className="text-xs font-medium text-gray-400">optional</span></th>
                     {showAnswers && <th className="p-4 font-bold text-gray-500 bg-[#F0FDF4]">Correct Answer</th>}
                   </tr>
                 </thead>
@@ -345,10 +395,25 @@ export default function Practice() {
                           }`}
                         />
                       </td>
+                      <td className="p-4">
+                        <input 
+                          id={`input-c3-${idx}`}
+                          type="text" 
+                          value={ans.c3_answer || ''} 
+                          onChange={(e) => updateAnswer(ans.id, 'c3_answer', e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, idx, 'c3')}
+                          disabled={quizState === 'submitted'}
+                          placeholder="optional"
+                          className={`w-full px-3 py-2 bg-gray-50 border rounded-xl font-medium focus:outline-none ${
+                            quizState === 'submitted' ? (ans.c3_isCorrect ? 'border-green-400 bg-green-50 text-green-700' : 'border-red-300 bg-red-50 text-red-700') : 'border-gray-200 focus:border-[#4ADE80]'
+                          }`}
+                        />
+                      </td>
                       {showAnswers && (
                         <td className="p-4 bg-[#F0FDF4]">
                           <div className="font-bold text-green-700">{ans.c2_correct}</div>
                           <div className="text-sm font-semibold text-green-600/70">{ans.c1_correct}</div>
+                          <div className="text-xs font-semibold text-green-600/60 mt-1">Syn: {ans.c3_correct || '-'}</div>
                         </td>
                       )}
                     </tr>

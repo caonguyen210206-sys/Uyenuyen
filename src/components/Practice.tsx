@@ -1,13 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Shuffle, CheckCircle, RefreshCcw, EyeOff, Eye } from 'lucide-react';
-import { QuizSession, QuizAnswer } from '../types';
+import { Shuffle, CheckCircle, RefreshCcw, EyeOff, Eye, Tags, ListChecks, Search } from 'lucide-react';
+import { QuizSession, QuizAnswer, VocabItem } from '../types';
 import { useVocab } from '../context/VocabContext';
 import { v4 as uuidv4 } from 'uuid';
+
+type SelectionMode = 'random' | 'topic' | 'manual';
 
 export default function Practice() {
   const { items, sessions, updateVocabItems, addQuizSession } = useVocab();
   const [mode, setMode] = useState<'Vietnamese' | 'Foreign'>('Foreign');
   const [count, setCount] = useState(10);
+  const [selectionMode, setSelectionMode] = useState<SelectionMode>('random');
+  const [selectedTopic, setSelectedTopic] = useState('All Topics');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [wordSearch, setWordSearch] = useState('');
   const [quizState, setQuizState] = useState<'idle' | 'active' | 'submitted' | 'flashcards'>('idle');
   
   const [currentAnswers, setCurrentAnswers] = useState<QuizAnswer[]>([]);
@@ -86,30 +92,67 @@ export default function Practice() {
     return userOptions.some(user => correctOptions.some(correct => user === correct));
   };
 
+  const getTopicLabel = (topic?: string) => topic?.trim() || 'No Topic';
+
+  const topicOptions = Array.from(new Set(activeItems.map(item => getTopicLabel(item.topic))))
+    .sort((a, b) => a.localeCompare(b));
+
+  const manualVisibleItems = activeItems.filter(item => {
+    const query = normalizeText(wordSearch);
+    if (!query) return true;
+    return normalizeText(`${item.word} ${item.meaning} ${item.topic} ${item.wordType}`).includes(query);
+  });
+
+  const manualSelectedItems = activeItems.filter(item => selectedIds.has(item.id));
+
+  const getPracticePool = (): VocabItem[] => {
+    if (selectionMode === 'topic') {
+      return activeItems.filter(item => selectedTopic === 'All Topics' || getTopicLabel(item.topic) === selectedTopic);
+    }
+
+    if (selectionMode === 'manual') {
+      return manualSelectedItems;
+    }
+
+    return activeItems;
+  };
+
+  const practicePool = getPracticePool();
+
+  const buildAnswers = (selected: VocabItem[]) => selected.map(item => ({
+    id: uuidv4(),
+    vocabItemId: item.id,
+    question: mode === 'Foreign' ? item.meaning : item.word,
+    c1_type: 'Word Type',
+    c1_answer: '',
+    c1_correct: item.wordType,
+    c2_type: mode === 'Foreign' ? 'Word' : 'Meaning',
+    c2_answer: '',
+    c2_correct: mode === 'Foreign' ? item.word : item.meaning,
+    c3_type: 'Synonyms',
+    c3_answer: '',
+    c3_correct: item.synonyms
+  }));
+
   const prepareQuizSet = () => {
-    if (activeItems.length === 0) return null;
-    const shuffled = [...activeItems].sort(() => 0.5 - Math.random());
-    const selected = shuffled.slice(0, Math.min(count, activeItems.length));
-    
-    return selected.map(item => ({
-      id: uuidv4(),
-      vocabItemId: item.id,
-      question: mode === 'Foreign' ? item.meaning : item.word,
-      c1_type: 'Word Type',
-      c1_answer: '',
-      c1_correct: item.wordType,
-      c2_type: mode === 'Foreign' ? 'Word' : 'Meaning',
-      c2_answer: '',
-      c2_correct: mode === 'Foreign' ? item.word : item.meaning,
-      c3_type: 'Synonyms',
-      c3_answer: '',
-      c3_correct: item.synonyms
-    }));
+    const pool = getPracticePool();
+    if (pool.length === 0) return null;
+
+    const selected = selectionMode === 'manual'
+      ? pool
+      : [...pool].sort(() => 0.5 - Math.random()).slice(0, Math.min(count, pool.length));
+
+    return buildAnswers(selected);
   };
 
   const generateQuiz = () => {
     const answers = prepareQuizSet();
-    if (!answers) return;
+    if (!answers) {
+      alert(selectionMode === 'manual'
+        ? 'Bạn chưa chọn từ nào để test.'
+        : 'Chưa có từ nào phù hợp để tạo bài test.');
+      return;
+    }
     setCurrentAnswers(answers);
     setQuizState('active');
     setShowAnswers(false);
@@ -117,7 +160,12 @@ export default function Practice() {
 
   const startFlashcards = () => {
     const answers = prepareQuizSet();
-    if (!answers) return;
+    if (!answers) {
+      alert(selectionMode === 'manual'
+        ? 'Bạn chưa chọn từ nào để học flashcard.'
+        : 'Chưa có từ nào phù hợp để học flashcard.');
+      return;
+    }
     setCurrentAnswers(answers);
     setQuizState('flashcards');
     setFlashcardIdx(0);
@@ -131,6 +179,27 @@ export default function Practice() {
 
   const updateAnswer = (id: string, field: 'c1_answer' | 'c2_answer' | 'c3_answer', value: string) => {
     setCurrentAnswers(prev => prev.map(ans => ans.id === id ? { ...ans, [field]: value } : ans));
+  };
+
+  const toggleManualWord = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllVisibleWords = () => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      manualVisibleItems.forEach(item => next.add(item.id));
+      return next;
+    });
+  };
+
+  const clearManualSelection = () => {
+    setSelectedIds(new Set());
   };
 
   const submitQuiz = () => {
@@ -222,32 +291,20 @@ export default function Practice() {
     }
   };
 
+  const sourceSummary = selectionMode === 'manual'
+    ? `${manualSelectedItems.length} selected words`
+    : selectionMode === 'topic'
+      ? `${practicePool.length} words in ${selectedTopic}`
+      : `${activeItems.length} active words`;
+
   return (
     <div className="animate-in fade-in duration-500 flex gap-8 h-full">
       {/* Left Column: Test Area */}
       <div className="flex-1 space-y-6">
-        <header className="flex justify-between items-end">
+        <header className="flex justify-between items-end gap-6">
           <div>
             <h2 className="text-3xl font-extrabold text-[#2D5A27]">Vocab Test</h2>
-            <div className="flex gap-4 mt-4">
-              <select 
-                value={mode} 
-                onChange={(e) => setMode(e.target.value as any)}
-                className="bg-white border-thin px-4 py-2 rounded-xl font-bold text-gray-600 focus:outline-none focus:border-[#A5D6A7]"
-              >
-                <option value="Foreign">Language: Foreign</option>
-                <option value="Vietnamese">Language: Vietnamese</option>
-              </select>
-              <select 
-                value={count} 
-                onChange={(e) => setCount(Number(e.target.value))}
-                className="bg-white border-thin px-4 py-2 rounded-xl font-bold text-gray-600 focus:outline-none focus:border-[#A5D6A7]"
-              >
-                <option value={10}>10 Questions</option>
-                <option value={20}>20 Questions</option>
-                <option value={50}>50 Questions</option>
-              </select>
-            </div>
+            <p className="text-gray-500 font-medium mt-1">Chọn random, theo chủ đề, hoặc tự tick từ muốn test.</p>
           </div>
           <div className="flex gap-3">
             <button 
@@ -262,7 +319,7 @@ export default function Practice() {
               className="flex items-center gap-2 px-5 py-2.5 bg-[#A5D6A7] hover:bg-[#81C784] text-[#2D5A27] font-bold rounded-xl border-thin shadow-sm transition-colors"
             >
               <Shuffle size={18} />
-              Random Set
+              Start Test
             </button>
             <button 
               onClick={submitQuiz}
@@ -282,6 +339,118 @@ export default function Practice() {
             </button>
           </div>
         </header>
+
+        {quizState === 'idle' && (
+          <div className="bg-white rounded-[2rem] card-shadow border-thin p-5 space-y-5">
+            <div className="flex flex-wrap items-center gap-3">
+              <select 
+                value={mode} 
+                onChange={(e) => setMode(e.target.value as any)}
+                className="bg-gray-50 border-thin px-4 py-2 rounded-xl font-bold text-gray-600 focus:outline-none focus:border-[#A5D6A7]"
+              >
+                <option value="Foreign">Question: Vietnamese → Answer English</option>
+                <option value="Vietnamese">Question: English → Answer Vietnamese</option>
+              </select>
+              <select 
+                value={count} 
+                onChange={(e) => setCount(Number(e.target.value))}
+                disabled={selectionMode === 'manual'}
+                className="bg-gray-50 border-thin px-4 py-2 rounded-xl font-bold text-gray-600 focus:outline-none focus:border-[#A5D6A7] disabled:opacity-50"
+              >
+                <option value={10}>10 Questions</option>
+                <option value={20}>20 Questions</option>
+                <option value={50}>50 Questions</option>
+              </select>
+              <span className="text-sm font-bold text-gray-400">Source: {sourceSummary}</span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <button
+                onClick={() => setSelectionMode('random')}
+                className={`px-4 py-3 rounded-2xl border-thin font-extrabold transition-colors flex items-center justify-center gap-2 ${selectionMode === 'random' ? 'bg-[#E8F5E9] text-[#2D5A27]' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
+              >
+                <Shuffle size={18} /> Random
+              </button>
+              <button
+                onClick={() => setSelectionMode('topic')}
+                className={`px-4 py-3 rounded-2xl border-thin font-extrabold transition-colors flex items-center justify-center gap-2 ${selectionMode === 'topic' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
+              >
+                <Tags size={18} /> By Topic
+              </button>
+              <button
+                onClick={() => setSelectionMode('manual')}
+                className={`px-4 py-3 rounded-2xl border-thin font-extrabold transition-colors flex items-center justify-center gap-2 ${selectionMode === 'manual' ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
+              >
+                <ListChecks size={18} /> Manual Pick
+              </button>
+            </div>
+
+            {selectionMode === 'topic' && (
+              <div className="rounded-2xl bg-blue-50 border border-blue-100 p-4">
+                <label className="block text-sm font-bold text-blue-700 mb-2">Chọn chủ đề để test</label>
+                <select
+                  value={selectedTopic}
+                  onChange={e => setSelectedTopic(e.target.value)}
+                  className="w-full bg-white border border-blue-100 px-4 py-3 rounded-xl font-bold text-gray-700 focus:outline-none"
+                >
+                  <option value="All Topics">All Topics</option>
+                  {topicOptions.map(topic => (
+                    <option key={topic} value={topic}>{topic}</option>
+                  ))}
+                </select>
+                <p className="text-sm text-blue-700 mt-2 font-semibold">
+                  App sẽ random trong {practicePool.length} từ thuộc chủ đề đã chọn.
+                </p>
+              </div>
+            )}
+
+            {selectionMode === 'manual' && (
+              <div className="rounded-2xl bg-purple-50 border border-purple-100 p-4 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-1">
+                    <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-purple-300" />
+                    <input
+                      value={wordSearch}
+                      onChange={e => setWordSearch(e.target.value)}
+                      placeholder="Search word, meaning, topic..."
+                      className="w-full bg-white border border-purple-100 pl-10 pr-4 py-3 rounded-xl font-semibold text-gray-700 focus:outline-none"
+                    />
+                  </div>
+                  <button onClick={selectAllVisibleWords} className="px-4 py-3 bg-white border border-purple-100 text-purple-600 rounded-xl font-bold hover:bg-purple-100">
+                    Select visible
+                  </button>
+                  <button onClick={clearManualSelection} className="px-4 py-3 bg-white border border-purple-100 text-gray-500 rounded-xl font-bold hover:bg-purple-100">
+                    Clear
+                  </button>
+                </div>
+
+                <div className="max-h-64 overflow-y-auto grid grid-cols-2 gap-2 pr-1">
+                  {manualVisibleItems.map(item => (
+                    <label key={item.id} className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition-colors ${selectedIds.has(item.id) ? 'bg-white border-purple-300 text-purple-700' : 'bg-white/70 border-purple-100 text-gray-600 hover:bg-white'}`}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(item.id)}
+                        onChange={() => toggleManualWord(item.id)}
+                        className="mt-1"
+                      />
+                      <span>
+                        <span className="block font-extrabold">{item.word}</span>
+                        <span className="block text-xs font-semibold text-gray-400">{item.meaning || '-'} • {getTopicLabel(item.topic)}</span>
+                      </span>
+                    </label>
+                  ))}
+                  {manualVisibleItems.length === 0 && (
+                    <div className="col-span-2 text-center text-purple-400 font-bold py-8">Không tìm thấy từ phù hợp.</div>
+                  )}
+                </div>
+
+                <p className="text-sm text-purple-700 font-bold">
+                  Đã chọn {manualSelectedItems.length} từ. Manual mode sẽ test đúng các từ bạn tick, không random thêm.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {quizState === 'flashcards' ? (
           <div className="flex flex-col items-center mt-10">
@@ -423,12 +592,12 @@ export default function Practice() {
             </div>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-3xl bg-gray-50 py-20 text-center px-4">
+          <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-3xl bg-gray-50 py-16 text-center px-4">
             <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-[#4ADE80] shadow-sm mb-4">
               <Shuffle size={32} />
             </div>
             <h3 className="text-xl font-bold text-gray-800 mb-2">Ready to test your memory?</h3>
-            <p className="text-gray-500 font-medium">Select your configuration and click "Random Set" to begin.</p>
+            <p className="text-gray-500 font-medium">Chọn nguồn từ ở trên rồi bấm “Start Test” hoặc “Study First”.</p>
           </div>
         )}
       </div>

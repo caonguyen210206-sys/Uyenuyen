@@ -1,13 +1,13 @@
-import { useState } from 'react';
-import { Plus, Wand2, Filter, Volume2, Save, X } from 'lucide-react';
+import { useState, type Dispatch, type SetStateAction } from 'react';
+import { Plus, Wand2, Filter, Volume2, Save, X, Pencil, Trash2, Sparkles } from 'lucide-react';
 import { VocabItem } from '../types';
 import { useVocab } from '../context/VocabContext';
 import { v4 as uuidv4 } from 'uuid';
-import { defineWord } from '../lib/gemini';
+import { defineWord, generateMiniQuiz } from '../lib/gemini';
 import { formatBand, normalizeBand, normalizeWord } from '../lib/vocabUtils';
 
 export default function VocabList() {
-  const { items, addVocabItem, updateVocabItems, settings } = useVocab();
+  const { items, addVocabItem, updateVocabItems, removeVocabItems, settings } = useVocab();
   const [viewMode, setViewMode] = useState<'table' | 'card'>('card');
   const [showAddModal, setShowAddModal] = useState(false);
   const [newWord, setNewWord] = useState('');
@@ -16,13 +16,17 @@ export default function VocabList() {
   const [filter, setFilter] = useState<'All' | 'Studying' | 'Completed' | string>('All');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [duplicateMessage, setDuplicateMessage] = useState('');
+  const [editingItem, setEditingItem] = useState<VocabItem | null>(null);
+  const [editData, setEditData] = useState<Partial<VocabItem>>({});
+  const [editMessage, setEditMessage] = useState('');
+  const [generatingQuizId, setGeneratingQuizId] = useState<string | null>(null);
 
   const activeItems = items.filter(i => i.status !== 'Storage');
 
-  const findDuplicate = (word: string) => {
+  const findDuplicate = (word: string, excludeId?: string) => {
     const normalized = normalizeWord(word);
     if (!normalized) return undefined;
-    return items.find(item => normalizeWord(item.word) === normalized);
+    return items.find(item => item.id !== excludeId && normalizeWord(item.word) === normalized);
   };
 
   const resetAddModal = () => {
@@ -30,6 +34,12 @@ export default function VocabList() {
     setNewWord('');
     setFormData({});
     setDuplicateMessage('');
+  };
+
+  const closeEditModal = () => {
+    setEditingItem(null);
+    setEditData({});
+    setEditMessage('');
   };
 
   const handleAutoDefine = async () => {
@@ -59,13 +69,13 @@ export default function VocabList() {
         setNewWord(correctedWord);
       }
 
-      setFormData({
-        ...formData,
+      setFormData(prev => ({
+        ...prev,
         ...data,
         band: normalizeBand(data.band),
-      });
+      }));
     } catch (err: any) {
-      console.error("Error auto defining:", err);
+      console.error('Error auto defining:', err);
       alert(err?.message || 'Auto Define chưa thành công. Hãy kiểm tra Gemini API Key trong Settings.');
     } finally {
       setIsDefining(false);
@@ -96,25 +106,97 @@ export default function VocabList() {
       topic: formData.topic || '',
       status: 'Studying',
       masteryLevel: 'New',
-      source: 'Manual',
+      source: formData.miniQuiz ? 'AI Defined' : 'Manual',
       createdAt: Date.now(),
+      updatedAt: Date.now(),
       timesChecked: 0,
       ownerId: ''
     };
+
+    if (formData.miniQuiz) {
+      newItem.miniQuiz = formData.miniQuiz;
+    }
     
     await addVocabItem(newItem);
     resetAddModal();
   };
 
-  const markLearned = async (id: string) => {
-    const updated = items.map(i => i.id === id ? { ...i, status: 'Completed' as const, masteryLevel: 'Mastery' as const } : i);
+  const startEdit = (item: VocabItem) => {
+    setEditingItem(item);
+    setEditData({ ...item });
+    setEditMessage('');
+  };
+
+  const handleUpdate = async () => {
+    if (!editingItem) return;
+    const wordToSave = (editData.word || '').trim();
+    if (!wordToSave || !editData.meaning) {
+      setEditMessage('Word và Meaning không được để trống.');
+      return;
+    }
+
+    const existingItem = findDuplicate(wordToSave, editingItem.id);
+    if (existingItem) {
+      setEditMessage(`Không lưu được vì từ "${existingItem.word}" đã tồn tại trong danh sách.`);
+      return;
+    }
+
+    const updatedItem: VocabItem = {
+      ...editingItem,
+      word: wordToSave,
+      ipa: editData.ipa || '',
+      wordType: editData.wordType || '',
+      meaning: editData.meaning || '',
+      definition: editData.definition || '',
+      example: editData.example || '',
+      synonyms: editData.synonyms || '',
+      antonyms: editData.antonyms || '',
+      band: normalizeBand(editData.band),
+      topic: editData.topic || '',
+      status: editData.status || editingItem.status,
+      masteryLevel: editData.masteryLevel || editingItem.masteryLevel,
+      updatedAt: Date.now(),
+    };
+
+    if (editData.miniQuiz) {
+      updatedItem.miniQuiz = editData.miniQuiz;
+    } else {
+      delete (updatedItem as Partial<VocabItem>).miniQuiz;
+    }
+
+    const updated = items.map(item => item.id === editingItem.id ? updatedItem : item);
     await updateVocabItems(updated);
-  }
+    closeEditModal();
+  };
+
+  const handleDelete = async (item: VocabItem) => {
+    if (!confirm(`Bạn có chắc muốn xoá từ "${item.word}" không?`)) return;
+    await removeVocabItems([item.id]);
+  };
+
+  const markLearned = async (id: string) => {
+    const updated = items.map(i => i.id === id ? { ...i, status: 'Completed' as const, masteryLevel: 'Mastery' as const, updatedAt: Date.now() } : i);
+    await updateVocabItems(updated);
+  };
+
+  const handleGenerateMiniQuiz = async (item: VocabItem) => {
+    setGeneratingQuizId(item.id);
+    try {
+      const miniQuiz = await generateMiniQuiz(item, settings.apiKey);
+      const updated = items.map(current => current.id === item.id ? { ...current, miniQuiz, updatedAt: Date.now() } : current);
+      await updateVocabItems(updated);
+    } catch (err: any) {
+      console.error('Mini quiz generation failed:', err);
+      alert(err?.message || 'Chưa tạo được mini quiz. Hãy kiểm tra Gemini API Key trong Settings.');
+    } finally {
+      setGeneratingQuizId(null);
+    }
+  };
 
   const filterOptions = [
     'All', 'Studying', 'Completed',
     'Mastery: New', 'Mastery: Mastery',
-    'Band: N/A', 'Band: 3.0', 'Band: 3.5', 'Band: 4.0', 'Band: 4.5', 'Band: 5.0', 'Band: 5.5', 'Band: 6.0', 'Band: 6.5', 'Band: 7.0', 'Band: 7.5', 'Band: 8.0', 'Band: 8.5', 'Band: 9.0'
+    'Band: N/A', 'Band: Basic', 'Band: 5.0', 'Band: 5.5', 'Band: 6.0', 'Band: 6.5', 'Band: 7.0', 'Band: 7.5', 'Band: 8.0', 'Band: 8.5', 'Band: 9.0'
   ];
 
   const filteredItems = activeItems.filter(i => {
@@ -137,6 +219,87 @@ export default function VocabList() {
       msg.lang = 'en-US';
       window.speechSynthesis.speak(msg);
     }
+  };
+
+  const renderVocabFormFields = (data: Partial<VocabItem>, setData: Dispatch<SetStateAction<Partial<VocabItem>>>) => (
+    <div className="grid grid-cols-2 gap-4 mb-6">
+      <div>
+        <label className="block text-sm font-bold text-gray-500 mb-1">IPA</label>
+        <input value={data.ipa || ''} onChange={e => setData(prev => ({...prev, ipa: e.target.value}))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl font-mono text-sm" />
+      </div>
+      <div>
+        <label className="block text-sm font-bold text-gray-500 mb-1">Type</label>
+        <input value={data.wordType || ''} onChange={e => setData(prev => ({...prev, wordType: e.target.value}))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl" />
+      </div>
+      <div className="col-span-2">
+        <label className="block text-sm font-bold text-gray-500 mb-1">Meaning (VN)</label>
+        <input value={data.meaning || ''} onChange={e => setData(prev => ({...prev, meaning: e.target.value}))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl font-semibold" />
+      </div>
+      <div className="col-span-2">
+        <label className="block text-sm font-bold text-gray-500 mb-1">Definition (EN)</label>
+        <textarea value={data.definition || ''} onChange={e => setData(prev => ({...prev, definition: e.target.value}))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm" rows={2} />
+      </div>
+      <div className="col-span-2">
+        <label className="block text-sm font-bold text-gray-500 mb-1">Example</label>
+        <textarea value={data.example || ''} onChange={e => setData(prev => ({...prev, example: e.target.value}))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm italic" rows={2} />
+      </div>
+      <div>
+        <label className="block text-sm font-bold text-gray-500 mb-1">Synonyms</label>
+        <input value={data.synonyms || ''} onChange={e => setData(prev => ({...prev, synonyms: e.target.value}))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl" />
+      </div>
+      <div>
+        <label className="block text-sm font-bold text-gray-500 mb-1">Antonyms</label>
+        <input value={data.antonyms || ''} onChange={e => setData(prev => ({...prev, antonyms: e.target.value}))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl" />
+      </div>
+      <div>
+        <label className="block text-sm font-bold text-gray-500 mb-1">Band</label>
+        <input value={data.band || ''} onChange={e => setData(prev => ({...prev, band: normalizeBand(e.target.value)}))} placeholder="Basic / 6.0" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl" />
+      </div>
+      <div>
+        <label className="block text-sm font-bold text-gray-500 mb-1">Topic</label>
+        <input value={data.topic || ''} onChange={e => setData(prev => ({...prev, topic: e.target.value}))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl" />
+      </div>
+      {data.miniQuiz && (
+        <div className="col-span-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          <div className="font-extrabold mb-1">Mini quiz đã có sẵn</div>
+          <div className="font-semibold">Fill blank: {data.miniQuiz.fillBlankQuestion}</div>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderMiniQuiz = (item: VocabItem) => {
+    if (!item.miniQuiz) return null;
+    const quiz = item.miniQuiz;
+    return (
+      <div className="mt-4 rounded-3xl border border-blue-100 bg-blue-50/70 p-4 text-sm space-y-3">
+        <div className="flex items-center gap-2 font-extrabold text-blue-700">
+          <Sparkles size={16} /> Mini Quiz
+        </div>
+        <div>
+          <p className="font-bold text-gray-700">1. Fill in the blank</p>
+          <p className="text-gray-700">{quiz.fillBlankQuestion}</p>
+          <p className="text-blue-700 font-bold mt-1">Answer: {quiz.fillBlankAnswer}</p>
+        </div>
+        <div>
+          <p className="font-bold text-gray-700">2. Multiple choice</p>
+          <p className="text-gray-700">{quiz.multipleChoiceQuestion}</p>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            {quiz.multipleChoiceOptions.map((option, index) => (
+              <span key={`${item.id}-option-${index}`} className="rounded-xl bg-white px-3 py-2 font-semibold text-gray-600 border border-blue-100">
+                {String.fromCharCode(65 + index)}. {option}
+              </span>
+            ))}
+          </div>
+          <p className="text-blue-700 font-bold mt-1">Answer: {quiz.multipleChoiceAnswer}</p>
+        </div>
+        <div>
+          <p className="font-bold text-gray-700">3. Rewrite / Make a sentence</p>
+          <p className="text-gray-700">{quiz.rewritePrompt}</p>
+          <p className="text-blue-700 font-bold mt-1">Model: {quiz.rewriteAnswer}</p>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -244,7 +407,7 @@ export default function VocabList() {
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <h3 className="text-2xl font-black text-[#2D5A27]">{item.word}</h3>
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <span className="text-gray-400 font-mono text-sm">{item.ipa}</span>
                     <span className="text-gray-400 text-sm italic font-bold">{item.wordType}</span>
                     <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-bold text-xs whitespace-nowrap">{formatBand(item.band)}</span>
@@ -258,24 +421,36 @@ export default function VocabList() {
                 </button>
               </div>
               
-              <div className="space-y-2 mb-6">
+              <div className="space-y-2 mb-4">
                 <p><span className="font-bold text-gray-600 w-24 inline-block">Meaning:</span> <span className="font-semibold text-gray-800">{item.meaning}</span></p>
                 <p><span className="font-bold text-gray-600 w-24 inline-block">Definition:</span> <span className="text-gray-700">{item.definition}</span></p>
                 <p><span className="font-bold text-gray-600 w-24 inline-block">Example:</span> <span className="text-gray-700 italic">"{item.example}"</span></p>
-                <div className="flex gap-4 pt-2">
+                <div className="flex gap-4 pt-2 flex-wrap">
                   <p className="text-sm"><span className="font-bold text-gray-500">Syn:</span> <span className="text-gray-600">{item.synonyms || '-'}</span></p>
                   <p className="text-sm"><span className="font-bold text-gray-500">Ant:</span> <span className="text-gray-600">{item.antonyms || '-'}</span></p>
                 </div>
               </div>
 
-              <div className="flex gap-3 pt-4 border-t border-thin">
+              {renderMiniQuiz(item)}
+
+              <div className="grid grid-cols-2 gap-3 pt-4 mt-4 border-t border-thin">
                 {item.status !== 'Completed' && (
-                  <button onClick={() => markLearned(item.id)} className="flex-1 py-2 bg-gray-50 hover:bg-gray-100 border-thin text-gray-600 font-bold rounded-xl transition-colors">
-                    Mark as Learned
+                  <button onClick={() => markLearned(item.id)} className="py-2 bg-gray-50 hover:bg-gray-100 border-thin text-gray-600 font-bold rounded-xl transition-colors">
+                    Mark Learned
                   </button>
                 )}
-                <button className="flex-1 py-2 bg-[#E8F5E9] border-thin text-[#2D5A27] font-bold rounded-xl transition-colors hover:bg-[#D0E8D0]">
-                  Practice
+                <button onClick={() => startEdit(item)} className="py-2 bg-[#E8F5E9] border-thin text-[#2D5A27] font-bold rounded-xl transition-colors hover:bg-[#D0E8D0] flex items-center justify-center gap-2">
+                  <Pencil size={16} /> Edit
+                </button>
+                <button 
+                  onClick={() => handleGenerateMiniQuiz(item)}
+                  disabled={generatingQuizId === item.id}
+                  className="py-2 bg-blue-50 border border-blue-100 text-blue-600 font-bold rounded-xl transition-colors hover:bg-blue-100 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <Sparkles size={16} /> {generatingQuizId === item.id ? 'Generating...' : item.miniQuiz ? 'Regenerate Quiz' : 'Mini Quiz'}
+                </button>
+                <button onClick={() => handleDelete(item)} className="py-2 bg-red-50 border border-red-100 text-red-500 font-bold rounded-xl transition-colors hover:bg-red-100 flex items-center justify-center gap-2">
+                  <Trash2 size={16} /> Delete
                 </button>
               </div>
             </div>
@@ -318,44 +493,7 @@ export default function VocabList() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div>
-                <label className="block text-sm font-bold text-gray-500 mb-1">IPA</label>
-                <input value={formData.ipa || ''} onChange={e => setFormData({...formData, ipa: e.target.value})} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl font-mono text-sm" />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-500 mb-1">Type</label>
-                <input value={formData.wordType || ''} onChange={e => setFormData({...formData, wordType: e.target.value})} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl" />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-sm font-bold text-gray-500 mb-1">Meaning (VN)</label>
-                <input value={formData.meaning || ''} onChange={e => setFormData({...formData, meaning: e.target.value})} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl font-semibold" />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-sm font-bold text-gray-500 mb-1">Definition (EN)</label>
-                <textarea value={formData.definition || ''} onChange={e => setFormData({...formData, definition: e.target.value})} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm" rows={2} />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-sm font-bold text-gray-500 mb-1">Example</label>
-                <textarea value={formData.example || ''} onChange={e => setFormData({...formData, example: e.target.value})} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm italic" rows={2} />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-500 mb-1">Synonyms</label>
-                <input value={formData.synonyms || ''} onChange={e => setFormData({...formData, synonyms: e.target.value})} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl" />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-500 mb-1">Antonyms</label>
-                <input value={formData.antonyms || ''} onChange={e => setFormData({...formData, antonyms: e.target.value})} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl" />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-500 mb-1">Band</label>
-                <input value={formData.band || ''} onChange={e => setFormData({...formData, band: normalizeBand(e.target.value)})} placeholder="6.0" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl" />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-500 mb-1">Topic</label>
-                <input value={formData.topic || ''} onChange={e => setFormData({...formData, topic: e.target.value})} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl" />
-              </div>
-            </div>
+            {renderVocabFormFields(formData, setFormData)}
 
             <button 
               onClick={handleSave}
@@ -363,6 +501,38 @@ export default function VocabList() {
             >
               <Save size={20} />
               Save Word
+            </button>
+          </div>
+        </div>
+      )}
+
+      {editingItem && (
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in">
+          <div className="bg-white rounded-[2.5rem] p-8 w-[600px] shadow-2xl max-h-[90vh] overflow-y-auto border-thin">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-extrabold text-gray-800">Edit Word</h3>
+              <button onClick={closeEditModal} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors"><X size={20} /></button>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-bold text-gray-500 mb-1">Word</label>
+              <input value={editData.word || ''} onChange={e => { setEditData(prev => ({...prev, word: e.target.value})); setEditMessage(''); }} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl font-bold text-lg" />
+            </div>
+
+            {editMessage && (
+              <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
+                {editMessage}
+              </div>
+            )}
+
+            {renderVocabFormFields(editData, setEditData)}
+
+            <button 
+              onClick={handleUpdate}
+              className="w-full py-4 bg-[#A5D6A7] text-[#2D5A27] font-bold rounded-2xl border-thin flex items-center justify-center gap-2 hover:bg-[#81C784] transition-colors text-lg"
+            >
+              <Save size={20} />
+              Save Changes
             </button>
           </div>
         </div>

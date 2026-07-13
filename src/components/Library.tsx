@@ -17,11 +17,32 @@ export default function Library({ setCurrentView }: LibraryProps) {
   const [aiInputText, setAiInputText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
+  const selectedItems = items.filter(item => selectedIds.has(item.id));
+  const selectedStorageItems = selectedItems.filter(item => item.status === 'Storage');
+
   const addToList = async (id: string) => {
     const newItems = items.map(item => 
-      item.id === id ? { ...item, status: 'Studying' as const } : item
+      item.id === id ? { ...item, status: 'Studying' as const, updatedAt: Date.now() } : item
     );
     await updateVocabItems(newItems);
+  };
+
+  const handleAddSelectedToList = async () => {
+    if (selectedStorageItems.length === 0) {
+      alert('Chỉ những từ đang ở Storage mới cần Add to List.');
+      return;
+    }
+
+    const selectedStorageIds = new Set(selectedStorageItems.map(item => item.id));
+    const newItems = items.map(item => 
+      selectedStorageIds.has(item.id)
+        ? { ...item, status: 'Studying' as const, updatedAt: Date.now() }
+        : item
+    );
+
+    await updateVocabItems(newItems);
+    setSelectedIds(new Set());
+    alert(`Đã thêm ${selectedStorageItems.length} từ vào My Vocab List.`);
   };
 
   const toggleSelectAll = () => {
@@ -102,6 +123,7 @@ export default function Library({ setCurrentView }: LibraryProps) {
         if (newVocabItems.length > 0) {
           const updatedItems = [...items, ...newVocabItems];
           await updateVocabItems(updatedItems);
+          setSelectedIds(new Set(newVocabItems.map(item => item.id)));
         }
 
         if (skippedWords.length > 0) {
@@ -111,7 +133,7 @@ export default function Library({ setCurrentView }: LibraryProps) {
         setAiModalMode('none');
         setAiInputText('');
         if (newVocabItems.length > 0) {
-          setCurrentView('vocab-list');
+          alert(`Đã đưa ${newVocabItems.length} từ vào Library và tick sẵn. Bấm "Add to List" để thêm tất cả vào My Vocab List.`);
         }
       } else {
         alert('Không tìm thấy từ vựng nào trong đoạn văn bản.');
@@ -133,15 +155,26 @@ export default function Library({ setCurrentView }: LibraryProps) {
           <h2 className="text-3xl font-extrabold text-[#2D5A27]">Vocabulary Library</h2>
           <p className="text-gray-500 font-medium mt-1">Kho lưu trữ từ vựng tổng</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap justify-end">
           {selectedIds.size > 0 && (
-            <button 
-              onClick={handleDeleteSelected}
-              className="flex items-center gap-2 px-5 py-2.5 bg-red-50 border-red-200 border-thin font-bold rounded-xl shadow-sm hover:bg-red-100 text-red-600 transition-colors"
-            >
-              <Trash2 size={18} />
-              Xoá ({selectedIds.size})
-            </button>
+            <>
+              {selectedStorageItems.length > 0 && (
+                <button 
+                  onClick={handleAddSelectedToList}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-[#E8F5E9] border-[#A5D6A7] border-thin font-bold rounded-xl shadow-sm hover:bg-[#D0E8D0] text-[#2D5A27] transition-colors"
+                >
+                  <Plus size={18} />
+                  Add to List ({selectedStorageItems.length})
+                </button>
+              )}
+              <button 
+                onClick={handleDeleteSelected}
+                className="flex items-center gap-2 px-5 py-2.5 bg-red-50 border-red-200 border-thin font-bold rounded-xl shadow-sm hover:bg-red-100 text-red-600 transition-colors"
+              >
+                <Trash2 size={18} />
+                Xoá ({selectedIds.size})
+              </button>
+            </>
           )}
           <button 
             onClick={() => setAiModalMode('raw')}
@@ -166,6 +199,12 @@ export default function Library({ setCurrentView }: LibraryProps) {
           </button>
         </div>
       </header>
+
+      {selectedIds.size > 0 && (
+        <div className="bg-[#F0FDF4] border border-[#BBF7D0] rounded-2xl px-5 py-4 text-sm font-bold text-[#2D5A27]">
+          Đã chọn {selectedIds.size} từ. Có {selectedStorageItems.length} từ đang ở Storage có thể Add to List hàng loạt.
+        </div>
+      )}
 
       <div className="bg-white rounded-[2.5rem] card-shadow border-thin overflow-hidden">
         <div className="overflow-x-auto">

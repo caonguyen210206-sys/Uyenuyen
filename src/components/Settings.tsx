@@ -14,6 +14,7 @@ export default function Settings() {
   });
   const [isSaved, setIsSaved] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [testError, setTestError] = useState('');
 
   useEffect(() => {
     setLocalSettings(globalSettings);
@@ -27,11 +28,13 @@ export default function Settings() {
 
   const handleTestConnection = async () => {
     setTestStatus('testing');
+    setTestError('');
     try {
       await testGeminiConnection(settings.apiKey);
       setTestStatus('success');
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      setTestError(e?.message || 'Không kết nối được Gemini. Hãy kiểm tra lại API key.');
       setTestStatus('error');
     }
   };
@@ -72,23 +75,30 @@ export default function Settings() {
                 <input 
                   type="password" 
                   value={settings.apiKey}
-                  onChange={e => setLocalSettings({...settings, apiKey: e.target.value})}
-                  placeholder="••••••••••••••••"
+                  onChange={e => {
+                    setLocalSettings({...settings, apiKey: e.target.value});
+                    setTestStatus('idle');
+                    setTestError('');
+                  }}
+                  placeholder="Dán Gemini API key của bạn"
                   className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-mono focus:outline-none focus:border-[#4ADE80] focus:ring-2 focus:ring-[#4ADE80]/20"
                 />
                 <button 
                   onClick={handleTestConnection}
-                  disabled={testStatus === 'testing' || !settings.apiKey}
+                  disabled={testStatus === 'testing' || !settings.apiKey.trim()}
                   className="px-6 py-3 bg-blue-50 text-blue-600 font-bold rounded-xl hover:bg-blue-100 transition-colors disabled:opacity-50"
                 >
                   {testStatus === 'testing' ? 'Testing...' : 'Test Connection'}
                 </button>
               </div>
-              <p className="text-sm text-gray-400 mt-2">
-                Required for AI features on GitHub Pages. Paste your Gemini API key, then save settings.
+              <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+                API key chỉ lưu trong trình duyệt hiện tại của bạn, không lưu lên Firestore. Nếu đổi máy, đổi trình duyệt hoặc xoá dữ liệu web, bạn cần nhập lại key.
+              </p>
+              <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 mt-2 font-semibold">
+                Không chia sẻ API key công khai. Nếu key đã lộ, hãy xoá key cũ trong AI Studio rồi tạo key mới.
               </p>
               {testStatus === 'success' && <p className="text-sm font-bold text-green-500 flex items-center gap-1 mt-2"><CheckCircle2 size={16}/> Connection successful!</p>}
-              {testStatus === 'error' && <p className="text-sm font-bold text-red-500 flex items-center gap-1 mt-2"><AlertCircle size={16}/> Connection failed. Please check your key.</p>}
+              {testStatus === 'error' && <p className="text-sm font-bold text-red-500 flex items-start gap-1 mt-2"><AlertCircle size={16} className="mt-0.5 shrink-0"/> <span>{testError || 'Connection failed. Please check your key.'}</span></p>}
             </div>
           </div>
         </div>

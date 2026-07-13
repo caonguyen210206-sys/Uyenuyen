@@ -1,6 +1,13 @@
 import { VocabItem, UserSettings, QuizSession } from "../types";
 import { db, auth } from "./firebase";
-import { collection, doc, getDocs, setDoc, writeBatch, deleteDoc } from "firebase/firestore";
+import { collection, doc, getDocs, setDoc, writeBatch } from "firebase/firestore";
+
+const DEFAULT_SETTINGS: UserSettings = {
+  apiKey: '',
+  defaultQuestions: 10,
+  defaultCriteria: ['Meaning', 'Word Type', 'Synonyms'],
+};
+const LOCAL_API_KEY_STORAGE_KEY = 'uyenuyen-gemini-api-key';
 
 enum OperationType {
   CREATE = 'create',
@@ -16,6 +23,40 @@ interface FirestoreErrorInfo {
   operationType: OperationType;
   path: string | null;
   authInfo: any;
+}
+
+function getLocalApiKey() {
+  try {
+    return localStorage.getItem(LOCAL_API_KEY_STORAGE_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+function saveLocalApiKey(apiKey?: string) {
+  try {
+    const trimmedKey = apiKey?.trim() || '';
+    if (trimmedKey) {
+      localStorage.setItem(LOCAL_API_KEY_STORAGE_KEY, trimmedKey);
+    } else {
+      localStorage.removeItem(LOCAL_API_KEY_STORAGE_KEY);
+    }
+  } catch {
+    // Local API key storage is browser-only. Ignore storage errors.
+  }
+}
+
+function withLocalApiKey(settings?: Partial<UserSettings>): UserSettings {
+  return {
+    ...DEFAULT_SETTINGS,
+    ...settings,
+    apiKey: getLocalApiKey(),
+  };
+}
+
+function withoutApiKey(settings: UserSettings): Omit<UserSettings, 'apiKey'> {
+  const { apiKey, ...settingsWithoutApiKey } = settings;
+  return settingsWithoutApiKey;
 }
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
@@ -105,15 +146,15 @@ export const deleteVocabItems = async (itemIds: string[]) => {
 };
 
 export const getSettings = async (): Promise<UserSettings> => {
-  if (!auth.currentUser) return { apiKey: '', defaultQuestions: 10, defaultCriteria: ['Meaning', 'Word Type', 'Synonyms'] };
+  if (!auth.currentUser) return withLocalApiKey();
   const path = `users/${auth.currentUser.uid}/settings`;
   try {
     const snapshot = await getDocs(collection(db, path));
-    if (snapshot.empty) return { apiKey: '', defaultQuestions: 10, defaultCriteria: ['Meaning', 'Word Type', 'Synonyms'] };
-    return snapshot.docs[0].data() as UserSettings;
+    if (snapshot.empty) return withLocalApiKey();
+    return withLocalApiKey(snapshot.docs[0].data() as Partial<UserSettings>);
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, path);
-    return { apiKey: '', defaultQuestions: 10, defaultCriteria: ['Meaning', 'Word Type', 'Synonyms'] };
+    return withLocalApiKey();
   }
 };
 
@@ -121,8 +162,12 @@ export const saveSettings = async (settings: UserSettings) => {
   if (!auth.currentUser) return;
   const path = `users/${auth.currentUser.uid}/settings`;
   try {
-    settings.ownerId = auth.currentUser.uid;
-    await setDoc(doc(db, path, 'default'), settings);
+    saveLocalApiKey(settings.apiKey);
+    const settingsForFirestore = withoutApiKey({
+      ...settings,
+      ownerId: auth.currentUser.uid,
+    });
+    await setDoc(doc(db, path, 'default'), settingsForFirestore);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }

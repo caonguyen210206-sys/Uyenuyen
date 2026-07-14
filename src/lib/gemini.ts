@@ -2,14 +2,15 @@ import type { MiniQuiz, VocabItem } from '../types';
 import { normalizeBand, normalizeWord } from './vocabUtils';
 
 const MODEL_CANDIDATES = [
-  "gemini-3.1-pro",
-  "gemini-2.5-pro",
-  "gemini-3.5-flash",
   "gemini-3.1-flash-lite",
   "gemini-2.5-flash-lite",
+  "gemini-2.0-flash-lite",
   "gemini-2.5-flash",
+  "gemini-3.5-flash",
+  "gemini-2.5-pro",
+  "gemini-3.1-pro",
 ];
-const CACHE_VERSION = "v7";
+const CACHE_VERSION = "v8";
 
 type VocabPayload = {
   correctedWord?: string;
@@ -138,6 +139,15 @@ function extractInteractionText(payload: any) {
   return "";
 }
 
+function isQuotaMessage(message: string) {
+  const lower = message.toLowerCase();
+  return lower.includes('quota')
+    || lower.includes('rate limit')
+    || lower.includes('resource_exhausted')
+    || lower.includes('free_tier')
+    || lower.includes('exceeded');
+}
+
 function shouldTryNextModel(status: number, message: string) {
   const lower = message.toLowerCase();
   return [400, 404, 429, 503].includes(status)
@@ -147,8 +157,7 @@ function shouldTryNextModel(status: number, message: string) {
     || lower.includes('not found')
     || lower.includes('unsupported')
     || lower.includes('unavailable')
-    || lower.includes('quota')
-    || lower.includes('rate limit');
+    || isQuotaMessage(message);
 }
 
 async function callGeminiModel(apiKey: string, model: string, prompt: string) {
@@ -191,6 +200,7 @@ async function generateJson(apiKey: string | undefined, prompt: string, cacheId?
 
   const key = requireApiKey(apiKey);
   const failedModels: string[] = [];
+  let sawQuotaError = false;
 
   for (let attempt = 0; attempt < MODEL_CANDIDATES.length; attempt++) {
     const model = MODEL_CANDIDATES[attempt];
@@ -204,6 +214,7 @@ async function generateJson(apiKey: string | undefined, prompt: string, cacheId?
       const status = Number(err?.status || 0);
       const message = String(err?.message || 'Gemini API chưa phản hồi.');
       failedModels.push(`${model}: ${message}`);
+      if (isQuotaMessage(message)) sawQuotaError = true;
 
       if (status === 401 || status === 403) {
         throw new Error('Gemini API Key không hợp lệ hoặc chưa có quyền dùng model này. Hãy kiểm tra lại key trong Settings.');
@@ -219,7 +230,11 @@ async function generateJson(apiKey: string | undefined, prompt: string, cacheId?
     }
   }
 
-  throw new Error(`Gemini đang bận hoặc key bị giới hạn. App đã thử nhiều model gồm Pro, Flash-Lite và Flash. Chi tiết: ${failedModels.slice(-2).join(' | ')}`);
+  if (sawQuotaError) {
+    throw new Error('Gemini API key đã hết quota free tier trong project hiện tại. Bạn cần đợi quota reset, giảm số lần Auto Define/Import ảnh, hoặc bật billing trong Google AI Studio để tăng giới hạn. App đã thử nhiều model nhẹ trước khi báo lỗi.');
+  }
+
+  throw new Error(`Gemini đang bận hoặc model chưa khả dụng. App đã thử nhiều model nhẹ và model Pro. Chi tiết: ${failedModels.slice(-2).join(' | ')}`);
 }
 
 export async function defineWord(word: string, apiKey?: string): Promise<VocabPayload> {

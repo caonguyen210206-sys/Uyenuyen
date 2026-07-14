@@ -1,16 +1,12 @@
 import type { MiniQuiz, VocabItem } from '../types';
 import { normalizeBand, normalizeWord } from './vocabUtils';
 
+// Free-tier friendly: use only light models and do not burn quota by trying many paid/heavy models.
 const MODEL_CANDIDATES = [
   "gemini-3.1-flash-lite",
   "gemini-2.5-flash-lite",
-  "gemini-2.0-flash-lite",
-  "gemini-2.5-flash",
-  "gemini-3.5-flash",
-  "gemini-2.5-pro",
-  "gemini-3.1-pro",
 ];
-const CACHE_VERSION = "v8";
+const CACHE_VERSION = "v9";
 
 type VocabPayload = {
   correctedWord?: string;
@@ -150,14 +146,20 @@ function isQuotaMessage(message: string) {
 
 function shouldTryNextModel(status: number, message: string) {
   const lower = message.toLowerCase();
-  return [400, 404, 429, 503].includes(status)
+  if (isQuotaMessage(message)) return false;
+  return [400, 404, 503].includes(status)
     || lower.includes('high demand')
     || lower.includes('overloaded')
     || lower.includes('temporarily')
     || lower.includes('not found')
     || lower.includes('unsupported')
-    || lower.includes('unavailable')
-    || isQuotaMessage(message);
+    || lower.includes('unavailable');
+}
+
+function buildQuotaError() {
+  return new Error(
+    'Gemini API key đã hết quota free tier trong project hiện tại. Để tránh hao quota thêm, app đã dừng retry. Bạn có thể nhập tay, đợi quota reset, dùng batch import ít hơn, hoặc bật billing cho project API trong Google AI Studio.'
+  );
 }
 
 async function callGeminiModel(apiKey: string, model: string, prompt: string) {
@@ -200,11 +202,10 @@ async function generateJson(apiKey: string | undefined, prompt: string, cacheId?
 
   const key = requireApiKey(apiKey);
   const failedModels: string[] = [];
-  let sawQuotaError = false;
 
   for (let attempt = 0; attempt < MODEL_CANDIDATES.length; attempt++) {
     const model = MODEL_CANDIDATES[attempt];
-    if (attempt > 0) await delay(450);
+    if (attempt > 0) await delay(350);
 
     try {
       const parsed = await callGeminiModel(key, model, prompt);
@@ -214,10 +215,13 @@ async function generateJson(apiKey: string | undefined, prompt: string, cacheId?
       const status = Number(err?.status || 0);
       const message = String(err?.message || 'Gemini API chưa phản hồi.');
       failedModels.push(`${model}: ${message}`);
-      if (isQuotaMessage(message)) sawQuotaError = true;
 
       if (status === 401 || status === 403) {
         throw new Error('Gemini API Key không hợp lệ hoặc chưa có quyền dùng model này. Hãy kiểm tra lại key trong Settings.');
+      }
+
+      if (isQuotaMessage(message)) {
+        throw buildQuotaError();
       }
 
       if (attempt < MODEL_CANDIDATES.length - 1 && shouldTryNextModel(status, message)) {
@@ -230,11 +234,7 @@ async function generateJson(apiKey: string | undefined, prompt: string, cacheId?
     }
   }
 
-  if (sawQuotaError) {
-    throw new Error('Gemini API key đã hết quota free tier trong project hiện tại. Bạn cần đợi quota reset, giảm số lần Auto Define/Import ảnh, hoặc bật billing trong Google AI Studio để tăng giới hạn. App đã thử nhiều model nhẹ trước khi báo lỗi.');
-  }
-
-  throw new Error(`Gemini đang bận hoặc model chưa khả dụng. App đã thử nhiều model nhẹ và model Pro. Chi tiết: ${failedModels.slice(-2).join(' | ')}`);
+  throw new Error(`Gemini đang bận hoặc model nhẹ chưa khả dụng. App chỉ thử model nhẹ để tiết kiệm free quota. Chi tiết: ${failedModels.slice(-2).join(' | ')}`);
 }
 
 export async function defineWord(word: string, apiKey?: string): Promise<VocabPayload> {
@@ -246,14 +246,13 @@ Return one compact JSON object with exactly these fields: correctedWord, ipa, wo
 }
 
 export async function generateMiniQuiz(item: Pick<VocabItem, 'word' | 'meaning' | 'definition' | 'example' | 'wordType'>, apiKey?: string): Promise<MiniQuiz> {
-  const prompt = `Create a mini quiz for this English vocabulary item for a Vietnamese IELTS learner.
+  const prompt = `Create a short mini quiz for this vocabulary item.
 Word: ${item.word}
-Meaning in Vietnamese: ${item.meaning}
+Meaning: ${item.meaning}
 Definition: ${item.definition}
 Example: ${item.example}
 Word type: ${item.wordType}
-Return one JSON object with exactly these fields: fillBlankQuestion, fillBlankAnswer, multipleChoiceQuestion, multipleChoiceOptions, multipleChoiceAnswer, rewritePrompt, rewriteAnswer.
-multipleChoiceOptions must contain exactly 4 options. The correct answer must be included in multipleChoiceOptions.`;
+Return one JSON object with exactly: fillBlankQuestion, fillBlankAnswer, multipleChoiceQuestion, multipleChoiceOptions, multipleChoiceAnswer, rewritePrompt, rewriteAnswer. Use exactly 4 options.`;
 
   const quiz = normalizeMiniQuiz(await generateJson(apiKey, prompt, cacheKey('mini-quiz', `${item.word}|${item.meaning}|${item.definition}`)));
   if (!quiz) throw new Error('Gemini không tạo được mini quiz cho từ này.');
@@ -262,14 +261,14 @@ multipleChoiceOptions must contain exactly 4 options. The correct answer must be
 
 export async function processRawText(rawText: string, apiKey?: string): Promise<VocabPayload[]> {
   const prompt = `Extract vocabulary from this raw text for a Vietnamese IELTS learner.
-Return a JSON array. Each item must have: word, ipa, wordType, meaning, definition, example, synonyms, antonyms, band, topic.
+Return a JSON array with at most 10 items. Each item must have: word, ipa, wordType, meaning, definition, example, synonyms, antonyms, band, topic.
 Text: ${rawText}`;
 
   return normalizeVocabArray(await generateJson(apiKey, prompt, cacheKey('raw', rawText)));
 }
 
 export async function extractVocabFromParagraph(paragraph: string, apiKey?: string): Promise<VocabPayload[]> {
-  const prompt = `Extract up to 15 useful vocabulary words from this paragraph for a Vietnamese IELTS learner.
+  const prompt = `Extract up to 8 useful vocabulary words from this paragraph for a Vietnamese IELTS learner.
 Return a JSON array. Each item must have: word, ipa, wordType, meaning, definition, example, synonyms, antonyms, band, topic.
 Paragraph: ${paragraph}`;
 

@@ -1,4 +1,4 @@
-import { VocabItem, UserSettings, QuizSession } from "../types";
+import { VocabItem, UserSettings, QuizSession, CollocationItem } from "../types";
 import { db, auth } from "./firebase";
 import { collection, doc, getDocs, setDoc, writeBatch } from "firebase/firestore";
 
@@ -80,29 +80,29 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw new Error(JSON.stringify(errInfo));
 }
 
-export const getVocabItems = async (): Promise<VocabItem[]> => {
+async function getUserCollection<T>(collectionName: string): Promise<T[]> {
   if (!auth.currentUser) return [];
-  const path = `users/${auth.currentUser.uid}/vocabItems`;
+  const path = `users/${auth.currentUser.uid}/${collectionName}`;
   try {
     const snapshot = await getDocs(collection(db, path));
-    return snapshot.docs.map(doc => doc.data() as VocabItem);
+    return snapshot.docs.map(doc => doc.data() as T);
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, path);
     return [];
   }
-};
+}
 
-export const saveVocabItems = async (items: VocabItem[]) => {
+async function saveUserCollection<T extends { id: string; ownerId?: string }>(collectionName: string, records: T[]) {
   if (!auth.currentUser) return;
-  const path = `users/${auth.currentUser.uid}/vocabItems`;
+  const path = `users/${auth.currentUser.uid}/${collectionName}`;
   try {
     const batches = [];
     let batch = writeBatch(db);
     let count = 0;
-    items.forEach(item => {
-      item.ownerId = auth.currentUser!.uid;
-      const docRef = doc(db, path, item.id);
-      batch.set(docRef, item);
+    records.forEach(record => {
+      record.ownerId = auth.currentUser!.uid;
+      const docRef = doc(db, path, record.id);
+      batch.set(docRef, record);
       count++;
       if (count === 490) {
         batches.push(batch.commit());
@@ -117,16 +117,16 @@ export const saveVocabItems = async (items: VocabItem[]) => {
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
-};
+}
 
-export const deleteVocabItems = async (itemIds: string[]) => {
+async function deleteUserCollectionRecords(collectionName: string, ids: string[]) {
   if (!auth.currentUser) return;
-  const path = `users/${auth.currentUser.uid}/vocabItems`;
+  const path = `users/${auth.currentUser.uid}/${collectionName}`;
   try {
     const batches = [];
     let batch = writeBatch(db);
     let count = 0;
-    itemIds.forEach(id => {
+    ids.forEach(id => {
       const docRef = doc(db, path, id);
       batch.delete(docRef);
       count++;
@@ -143,6 +143,30 @@ export const deleteVocabItems = async (itemIds: string[]) => {
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }
+}
+
+export const getVocabItems = async (): Promise<VocabItem[]> => {
+  return getUserCollection<VocabItem>('vocabItems');
+};
+
+export const saveVocabItems = async (items: VocabItem[]) => {
+  await saveUserCollection('vocabItems', items);
+};
+
+export const deleteVocabItems = async (itemIds: string[]) => {
+  await deleteUserCollectionRecords('vocabItems', itemIds);
+};
+
+export const getCollocationItems = async (): Promise<CollocationItem[]> => {
+  return getUserCollection<CollocationItem>('collocations');
+};
+
+export const saveCollocationItems = async (items: CollocationItem[]) => {
+  await saveUserCollection('collocations', items);
+};
+
+export const deleteCollocationItems = async (itemIds: string[]) => {
+  await deleteUserCollectionRecords('collocations', itemIds);
 };
 
 export const getSettings = async (): Promise<UserSettings> => {
@@ -174,15 +198,7 @@ export const saveSettings = async (settings: UserSettings) => {
 };
 
 export const getQuizSessions = async (): Promise<QuizSession[]> => {
-  if (!auth.currentUser) return [];
-  const path = `users/${auth.currentUser.uid}/quizSessions`;
-  try {
-    const snapshot = await getDocs(collection(db, path));
-    return snapshot.docs.map(doc => doc.data() as QuizSession);
-  } catch (error) {
-    handleFirestoreError(error, OperationType.GET, path);
-    return [];
-  }
+  return getUserCollection<QuizSession>('quizSessions');
 };
 
 export const saveQuizSession = async (session: QuizSession) => {

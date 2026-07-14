@@ -1,14 +1,10 @@
 import type { CollocationItem } from '../types';
 import { normalizeBand, normalizeWord } from './vocabUtils';
 
+// Free-tier friendly: collocation import is often heavier than word define, so use only light models.
 const MODEL_CANDIDATES = [
   'gemini-3.1-flash-lite',
   'gemini-2.5-flash-lite',
-  'gemini-2.0-flash-lite',
-  'gemini-2.5-flash',
-  'gemini-3.5-flash',
-  'gemini-2.5-pro',
-  'gemini-3.1-pro',
 ];
 
 const BAND_GUIDE = `Band estimates IELTS collocation difficulty, not essay score.
@@ -62,14 +58,14 @@ function isQuotaMessage(message: string) {
 
 function shouldTryNextModel(status: number, message: string) {
   const lower = message.toLowerCase();
-  return [400, 404, 429, 503].includes(status)
+  if (isQuotaMessage(message)) return false;
+  return [400, 404, 503].includes(status)
     || lower.includes('high demand')
     || lower.includes('overloaded')
     || lower.includes('temporarily')
     || lower.includes('not found')
     || lower.includes('unsupported')
-    || lower.includes('unavailable')
-    || isQuotaMessage(message);
+    || lower.includes('unavailable');
 }
 
 function normalizeCollocation(item: CollocationPayload): CollocationPayload | null {
@@ -91,6 +87,12 @@ function normalizeCollocationArray(data: unknown): CollocationPayload[] {
   return data
     .map(item => normalizeCollocation(item || {}))
     .filter(Boolean) as CollocationPayload[];
+}
+
+function buildQuotaError() {
+  return new Error(
+    'Gemini API key đã hết quota free tier trong project hiện tại. Để tiết kiệm quota, app đã dừng retry. Hãy nhập thủ công vài collocation, import text ngắn hơn, tránh import ảnh liên tục, đợi quota reset hoặc bật billing cho project API.'
+  );
 }
 
 async function callGeminiModel(apiKey: string, model: string, prompt: string, image?: ImageInput) {
@@ -146,11 +148,10 @@ async function callGeminiModel(apiKey: string, model: string, prompt: string, im
 async function generateJson(apiKey: string | undefined, prompt: string, image?: ImageInput) {
   const key = requireApiKey(apiKey);
   let lastMessage = '';
-  let sawQuotaError = false;
 
   for (let attempt = 0; attempt < MODEL_CANDIDATES.length; attempt++) {
     const model = MODEL_CANDIDATES[attempt];
-    if (attempt > 0) await delay(450);
+    if (attempt > 0) await delay(350);
 
     try {
       return await callGeminiModel(key, model, prompt, image);
@@ -158,10 +159,13 @@ async function generateJson(apiKey: string | undefined, prompt: string, image?: 
       const status = Number(err?.status || 0);
       const message = String(err?.message || 'Gemini API chưa phản hồi.');
       lastMessage = `${model}: ${message}`;
-      if (isQuotaMessage(message)) sawQuotaError = true;
 
       if (status === 401 || status === 403) {
         throw new Error('Gemini API Key không hợp lệ hoặc chưa có quyền dùng model này. Hãy kiểm tra lại key trong Settings.');
+      }
+
+      if (isQuotaMessage(message)) {
+        throw buildQuotaError();
       }
 
       if (attempt < MODEL_CANDIDATES.length - 1 && shouldTryNextModel(status, message)) {
@@ -174,19 +178,15 @@ async function generateJson(apiKey: string | undefined, prompt: string, image?: 
     }
   }
 
-  if (sawQuotaError) {
-    throw new Error('Gemini API key đã hết quota free tier trong project hiện tại. Bạn cần đợi quota reset, giảm số lần import ảnh/text, hoặc bật billing trong Google AI Studio để tăng giới hạn. App đã thử nhiều model nhẹ trước khi báo lỗi.');
-  }
-
-  throw new Error(`Gemini đang bận hoặc model chưa khả dụng. Đã thử nhiều model nhẹ và model Pro. ${lastMessage}`);
+  throw new Error(`Gemini đang bận hoặc model nhẹ chưa khả dụng. App chỉ thử model nhẹ để tiết kiệm free quota. ${lastMessage}`);
 }
 
 export async function extractCollocationsFromText(text: string, apiKey?: string, mode: 'raw' | 'paragraph' = 'paragraph') {
   const prompt = mode === 'raw'
     ? `Extract English collocations from this raw vocabulary/collocation list for a Vietnamese IELTS learner.
-Return a JSON array. Each item must have exactly: phrase, meaning, definition, structure, example, topic, band.
+Return a JSON array with at most 10 items. Each item must have exactly: phrase, meaning, definition, structure, example, topic, band.
 Raw input: ${text}`
-    : `Extract 8-20 useful English collocations from this paragraph for a Vietnamese IELTS learner.
+    : `Extract 5-10 useful English collocations from this paragraph for a Vietnamese IELTS learner.
 Focus on natural word combinations, not single words.
 Return a JSON array. Each item must have exactly: phrase, meaning, definition, structure, example, topic, band.
 Paragraph: ${text}`;
@@ -195,8 +195,8 @@ Paragraph: ${text}`;
 }
 
 export async function extractCollocationsFromImage(image: ImageInput, apiKey?: string) {
-  const prompt = `Read this image and extract useful English collocations for a Vietnamese IELTS learner.
-The image may be a textbook page, notes, screenshot, or handwritten/typed vocabulary list.
+  const prompt = `Read this image and extract 5-10 useful English collocations for a Vietnamese IELTS learner.
+The image may be a textbook page, notes, screenshot, or vocabulary list.
 Extract collocations, not single words when possible.
 Return a JSON array. Each item must have exactly: phrase, meaning, definition, structure, example, topic, band.`;
 

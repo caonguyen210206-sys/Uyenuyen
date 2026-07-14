@@ -1,17 +1,32 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { VocabItem, QuizSession, UserSettings } from '../types';
-import { getVocabItems, saveVocabItems, deleteVocabItems, getQuizSessions, saveQuizSession, getSettings, saveSettings } from '../lib/storage';
+import { VocabItem, QuizSession, UserSettings, CollocationItem } from '../types';
+import {
+  getVocabItems,
+  saveVocabItems,
+  deleteVocabItems,
+  getQuizSessions,
+  saveQuizSession,
+  getSettings,
+  saveSettings,
+  getCollocationItems,
+  saveCollocationItems,
+  deleteCollocationItems,
+} from '../lib/storage';
 import { auth } from '../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
 interface VocabContextType {
   items: VocabItem[];
+  collocations: CollocationItem[];
   sessions: QuizSession[];
   settings: UserSettings;
   loading: boolean;
   addVocabItem: (item: VocabItem) => Promise<void>;
   updateVocabItems: (items: VocabItem[]) => Promise<void>;
   removeVocabItems: (ids: string[]) => Promise<void>;
+  addCollocationItem: (item: CollocationItem) => Promise<void>;
+  updateCollocationItems: (items: CollocationItem[]) => Promise<void>;
+  removeCollocationItems: (ids: string[]) => Promise<void>;
   addQuizSession: (session: QuizSession) => Promise<void>;
   updateSettings: (settings: UserSettings) => Promise<void>;
   refreshData: () => Promise<void>;
@@ -23,6 +38,7 @@ const VocabContext = createContext<VocabContextType | undefined>(undefined);
 
 export const VocabProvider = ({ children }: { children: ReactNode }) => {
   const [items, setItems] = useState<VocabItem[]>([]);
+  const [collocations, setCollocations] = useState<CollocationItem[]>([]);
   const [sessions, setSessions] = useState<QuizSession[]>([]);
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
   const [loading, setLoading] = useState(true);
@@ -31,12 +47,14 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
     if (!auth.currentUser) return;
     setLoading(true);
     try {
-      const [fetchedItems, fetchedSessions, fetchedSettings] = await Promise.all([
+      const [fetchedItems, fetchedCollocations, fetchedSessions, fetchedSettings] = await Promise.all([
         getVocabItems(),
+        getCollocationItems(),
         getQuizSessions(),
         getSettings()
       ]);
       setItems(fetchedItems);
+      setCollocations(fetchedCollocations);
       setSessions(fetchedSessions);
       setSettings(fetchedSettings);
     } catch (error) {
@@ -52,6 +70,7 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
         fetchAllData();
       } else {
         setItems([]);
+        setCollocations([]);
         setSessions([]);
         setSettings(defaultSettings);
         setLoading(false);
@@ -67,9 +86,6 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const updateVocabItems = async (newItems: VocabItem[]) => {
-    // Merge or completely replace? The storage function completely replaces/updates the ones passed.
-    // Wait, saveVocabItems does a batch.set for all items passed.
-    // We should probably just pass the whole array to keep it simple and update state.
     setItems(newItems);
     await saveVocabItems(newItems);
   };
@@ -78,6 +94,23 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
     const newItems = items.filter(item => !ids.includes(item.id));
     setItems(newItems);
     await deleteVocabItems(ids);
+  };
+
+  const addCollocationItem = async (item: CollocationItem) => {
+    const newItems = [...collocations, item];
+    setCollocations(newItems);
+    await saveCollocationItems(newItems);
+  };
+
+  const updateCollocationItems = async (newItems: CollocationItem[]) => {
+    setCollocations(newItems);
+    await saveCollocationItems(newItems);
+  };
+
+  const removeCollocationItems = async (ids: string[]) => {
+    const newItems = collocations.filter(item => !ids.includes(item.id));
+    setCollocations(newItems);
+    await deleteCollocationItems(ids);
   };
 
   const addQuizSession = async (session: QuizSession) => {
@@ -93,12 +126,16 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
   return (
     <VocabContext.Provider value={{
       items,
+      collocations,
       sessions,
       settings,
       loading,
       addVocabItem,
       updateVocabItems,
       removeVocabItems,
+      addCollocationItem,
+      updateCollocationItems,
+      removeCollocationItems,
       addQuizSession,
       updateSettings: updateSettingsLocal,
       refreshData: fetchAllData

@@ -1,4 +1,4 @@
-export type ViewState = 'dashboard' | 'library' | 'vocab-list' | 'practice' | 'monthly-review' | 'settings';
+export type ViewState = 'dashboard' | 'library' | 'vocab-list' | 'collocations' | 'practice' | 'monthly-review' | 'settings';
 
 export type VocabStatus = 'Storage' | 'Studying' | 'Completed';
 export type MasteryLevel = 'New' | 'Beginner' | 'Advanced' | 'Mastery';
@@ -33,6 +33,23 @@ export interface VocabItem {
   lastScore?: number;
   timesChecked: number;
   miniQuiz?: MiniQuiz;
+  ownerId?: string;
+}
+
+export interface CollocationItem {
+  id: string;
+  phrase: string;
+  meaning: string;
+  definition: string;
+  structure: string;
+  example: string;
+  topic: string;
+  band: string;
+  status: VocabStatus;
+  source: string;
+  createdAt: number;
+  updatedAt?: number;
+  timesChecked: number;
   ownerId?: string;
 }
 

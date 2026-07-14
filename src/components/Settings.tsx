@@ -94,6 +94,9 @@ export default function Settings() {
               <p className="text-sm text-gray-500 mt-2 leading-relaxed">
                 API key chỉ lưu trong trình duyệt hiện tại của bạn, không lưu lên Firestore. Nếu đổi máy, đổi trình duyệt hoặc xoá dữ liệu web, bạn cần nhập lại key.
               </p>
+              <div className="text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2 mt-2 font-semibold leading-relaxed">
+                Free tier mode đang bật mặc định: app chỉ dùng model nhẹ, hạn chế retry, Auto Define chỉ định nghĩa từ, Mini Quiz/Import ảnh là thao tác riêng để tránh hao quota. Khi hết quota, hãy nhập tay hoặc đợi reset thay vì bấm lại liên tục.
+              </div>
               <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 mt-2 font-semibold">
                 Không chia sẻ API key công khai. Nếu key đã lộ, hãy xoá key cũ trong AI Studio rồi tạo key mới.
               </p>

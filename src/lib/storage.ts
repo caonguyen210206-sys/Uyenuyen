@@ -6,6 +6,7 @@ const DEFAULT_SETTINGS: UserSettings = {
   apiKey: '',
   defaultQuestions: 10,
   defaultCriteria: ['Meaning', 'Word Type', 'Synonyms'],
+  defaultCollocationsSeeded: false,
 };
 const LOCAL_API_KEY_STORAGE_KEY = 'uyenuyen-gemini-api-key';
 

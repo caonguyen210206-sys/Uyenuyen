@@ -91,5 +91,6 @@ export interface UserSettings {
   apiKey: string;
   defaultQuestions: number;
   defaultCriteria: string[];
+  defaultCollocationsSeeded?: boolean;
   ownerId?: string;
 }

@@ -14,6 +14,8 @@ import {
 } from '../lib/storage';
 import { auth } from '../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import { DEFAULT_COLLOCATIONS } from '../data/defaultCollocations';
+import { normalizeWord } from '../lib/vocabUtils';
 
 interface VocabContextType {
   items: VocabItem[];
@@ -36,6 +38,23 @@ const defaultSettings: UserSettings = { apiKey: '', defaultQuestions: 10, defaul
 
 const VocabContext = createContext<VocabContextType | undefined>(undefined);
 
+function mergeDefaultCollocations(fetchedCollocations: CollocationItem[]) {
+  const existingKeys = new Set(fetchedCollocations.map(item => normalizeWord(item.phrase)));
+  const defaultItemsToAdd = DEFAULT_COLLOCATIONS
+    .filter(item => !existingKeys.has(normalizeWord(item.phrase)))
+    .map(item => ({
+      ...item,
+      ownerId: auth.currentUser?.uid,
+    }));
+
+  return {
+    mergedCollocations: defaultItemsToAdd.length > 0
+      ? [...fetchedCollocations, ...defaultItemsToAdd]
+      : fetchedCollocations,
+    addedDefaultCount: defaultItemsToAdd.length,
+  };
+}
+
 export const VocabProvider = ({ children }: { children: ReactNode }) => {
   const [items, setItems] = useState<VocabItem[]>([]);
   const [collocations, setCollocations] = useState<CollocationItem[]>([]);
@@ -53,10 +72,16 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
         getQuizSessions(),
         getSettings()
       ]);
+      const { mergedCollocations, addedDefaultCount } = mergeDefaultCollocations(fetchedCollocations);
+
       setItems(fetchedItems);
-      setCollocations(fetchedCollocations);
+      setCollocations(mergedCollocations);
       setSessions(fetchedSessions);
       setSettings(fetchedSettings);
+
+      if (addedDefaultCount > 0) {
+        await saveCollocationItems(mergedCollocations);
+      }
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {

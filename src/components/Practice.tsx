@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Shuffle, CheckCircle, RefreshCcw, EyeOff, Eye, Tags, ListChecks, Search } from 'lucide-react';
-import { QuizSession, QuizAnswer, VocabItem } from '../types';
+import { QuizSession, QuizAnswer, VocabItem, ViewState } from '../types';
 import { useVocab } from '../context/VocabContext';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -8,7 +8,11 @@ type SelectionMode = 'random' | 'topic' | 'manual';
 
 const PRACTICE_SELECTION_STORAGE_KEY = 'uyenuyen-practice-selection';
 
-export default function Practice() {
+interface PracticeProps {
+  currentView: ViewState;
+}
+
+export default function Practice({ currentView }: PracticeProps) {
   const { items, sessions, updateVocabItems, addQuizSession } = useVocab();
   const [mode, setMode] = useState<'Vietnamese' | 'Foreign'>('Foreign');
   const [count, setCount] = useState(10);
@@ -93,14 +97,15 @@ export default function Practice() {
   const manualVisibleItems = activeItems.filter(item => {
     const query = normalizeText(wordSearch);
     if (!query) return true;
-    return normalizeText(`${item.word} ${item.meaning} ${item.topic} ${item.wordType}`).includes(query);
+    return normalizeText(`${item.word} ${item.meaning} ${item.topic} ${item.wordType} ${item.source}`).includes(query);
   });
 
   const manualSelectedItems = activeItems.filter(item => selectedIds.has(item.id));
 
-  useEffect(() => {
+  const readPracticeHandoff = () => {
     const raw = sessionStorage.getItem(PRACTICE_SELECTION_STORAGE_KEY);
-    if (!raw || activeItems.length === 0) return;
+    if (!raw) return false;
+    if (activeItems.length === 0) return false;
 
     try {
       const payload = JSON.parse(raw) as { ids?: string[]; label?: string; source?: string };
@@ -113,13 +118,21 @@ export default function Practice() {
         setQuizState('idle');
         setCurrentAnswers([]);
         setShowAnswers(false);
+        setCurrentScore(0);
+        sessionStorage.removeItem(PRACTICE_SELECTION_STORAGE_KEY);
+        return true;
       }
     } catch (error) {
       console.error('Could not read practice handoff', error);
-    } finally {
       sessionStorage.removeItem(PRACTICE_SELECTION_STORAGE_KEY);
     }
-  }, [items]);
+    return false;
+  };
+
+  useEffect(() => {
+    if (currentView !== 'practice') return;
+    readPracticeHandoff();
+  }, [currentView, items]);
 
   const getPracticePool = (): VocabItem[] => {
     if (selectionMode === 'topic') {
@@ -190,27 +203,34 @@ export default function Practice() {
   };
 
   const toggleManualWord = (id: string) => {
-    setHandoffLabel('');
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      setHandoffLabel('');
       return next;
     });
   };
 
   const selectAllVisibleWords = () => {
-    setHandoffLabel('');
     setSelectedIds(prev => {
       const next = new Set(prev);
       manualVisibleItems.forEach(item => next.add(item.id));
       return next;
     });
+    setHandoffLabel('');
   };
 
   const clearManualSelection = () => {
     setSelectedIds(new Set());
     setHandoffLabel('');
+  };
+
+  const switchSelectionMode = (nextMode: SelectionMode) => {
+    setSelectionMode(nextMode);
+    if (nextMode !== 'manual') {
+      setHandoffLabel('');
+    }
   };
 
   const submitQuiz = () => {
@@ -223,7 +243,12 @@ export default function Practice() {
       const isC3 = isSynonymCorrect(ans.c3_answer, ans.c3_correct);
       const isFull = isC1 && isC2 && isC3;
       if (isFull) totalCorrect++;
-      return { ...ans, c1_isCorrect: isC1, c2_isCorrect: isC2, c3_isCorrect: isC3 };
+      return {
+        ...ans,
+        c1_isCorrect: isC1,
+        c2_isCorrect: isC2,
+        c3_isCorrect: isC3,
+      };
     });
     setCurrentAnswers(evaluated);
     setCurrentScore(Math.round((totalCorrect / evaluated.length) * 100));
@@ -239,7 +264,7 @@ export default function Practice() {
       criteria: ['Word Type', mode === 'Foreign' ? 'Word' : 'Meaning', 'Synonyms'],
       score: currentScore,
       savedAt: Date.now(),
-      type: selectionMode === 'manual' && handoffLabel ? 'Collocation Practice' : 'Practice'
+      type: selectionMode === 'manual' && handoffLabel ? 'Collocation Selected' : 'Practice',
     };
     await addQuizSession(session);
 
@@ -257,6 +282,7 @@ export default function Practice() {
     await updateVocabItems(allItems);
     setQuizState('idle');
     setCurrentAnswers([]);
+    setHandoffLabel('');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, currentIdx: number, type: 'c1' | 'c2' | 'c3') => {
@@ -298,13 +324,6 @@ export default function Practice() {
       ? `${practicePool.length} words in ${selectedTopic}`
       : `${activeItems.length} active words`;
 
-  const switchSelectionMode = (nextMode: SelectionMode) => {
-    setSelectionMode(nextMode);
-    if (nextMode !== 'manual') {
-      setHandoffLabel('');
-    }
-  };
-
   return (
     <div className="animate-in fade-in duration-500 flex gap-8 h-full">
       <div className="flex-1 space-y-6">
@@ -331,12 +350,6 @@ export default function Practice() {
 
         {quizState === 'idle' && (
           <div className="bg-white rounded-[2rem] card-shadow border-thin p-5 space-y-5">
-            {handoffLabel && (
-              <div className="rounded-2xl bg-blue-50 border border-blue-100 px-4 py-3 text-blue-700 font-bold">
-                Đang Practice đúng nhóm từ Collocation vừa chọn: {handoffLabel}. Không trộn vocab cũ.
-              </div>
-            )}
-
             <div className="flex flex-wrap items-center gap-3">
               <select value={mode} onChange={(e) => setMode(e.target.value as any)} className="bg-gray-50 border-thin px-4 py-2 rounded-xl font-bold text-gray-600 focus:outline-none focus:border-[#A5D6A7]">
                 <option value="Foreign">Question: Vietnamese → Answer English</option>
@@ -349,6 +362,12 @@ export default function Practice() {
               </select>
               <span className="text-sm font-bold text-gray-400">Source: {sourceSummary}</span>
             </div>
+
+            {handoffLabel && selectionMode === 'manual' && (
+              <div className="rounded-2xl bg-green-50 border border-green-100 px-4 py-3 text-sm font-bold text-green-700">
+                Đang Practice đúng nhóm Collocation vừa chọn. Không trộn vocab cũ.
+              </div>
+            )}
 
             <div className="grid grid-cols-3 gap-3">
               <button onClick={() => switchSelectionMode('random')} className={`px-4 py-3 rounded-2xl border-thin font-extrabold transition-colors flex items-center justify-center gap-2 ${selectionMode === 'random' ? 'bg-[#E8F5E9] text-[#2D5A27]' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>
@@ -378,7 +397,7 @@ export default function Practice() {
                 <div className="flex items-center gap-3">
                   <div className="relative flex-1">
                     <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-purple-300" />
-                    <input value={wordSearch} onChange={e => setWordSearch(e.target.value)} placeholder="Search word, meaning, topic..." className="w-full bg-white border border-purple-100 pl-10 pr-4 py-3 rounded-xl font-semibold text-gray-700 focus:outline-none" />
+                    <input value={wordSearch} onChange={e => setWordSearch(e.target.value)} placeholder="Search word, collocation, meaning, topic..." className="w-full bg-white border border-purple-100 pl-10 pr-4 py-3 rounded-xl font-semibold text-gray-700 focus:outline-none" />
                   </div>
                   <button onClick={selectAllVisibleWords} className="px-4 py-3 bg-white border border-purple-100 text-purple-600 rounded-xl font-bold hover:bg-purple-100">Select visible</button>
                   <button onClick={clearManualSelection} className="px-4 py-3 bg-white border border-purple-100 text-gray-500 rounded-xl font-bold hover:bg-purple-100">Clear</button>
@@ -397,9 +416,7 @@ export default function Practice() {
                   {manualVisibleItems.length === 0 && <div className="col-span-2 text-center text-purple-400 font-bold py-8">Không tìm thấy từ phù hợp.</div>}
                 </div>
 
-                <p className="text-sm text-purple-700 font-bold">
-                  Đã chọn {manualSelectedItems.length} item. Manual mode sẽ test đúng những item bạn tick, không random thêm.
-                </p>
+                <p className="text-sm text-purple-700 font-bold">Đã chọn {manualSelectedItems.length} item. Manual mode chỉ test đúng item bạn tick.</p>
               </div>
             )}
           </div>
@@ -407,24 +424,26 @@ export default function Practice() {
 
         {quizState === 'flashcards' ? (
           <div className="flex flex-col items-center mt-10">
-            <div className="w-full max-w-2xl h-80 perspective-1000 cursor-pointer group" onClick={() => { setFlashcardFlipped(!flashcardFlipped); if (!flashcardFlipped) playAudio(currentAnswers[flashcardIdx]?.c2_correct || ''); }}>
-              <div className={`relative w-full h-full transition-transform duration-500 transform-style-preserve-3d ${flashcardFlipped ? 'rotate-y-180' : ''}`}>
-                <div className="absolute w-full h-full bg-white rounded-[2.5rem] card-shadow border-thin flex flex-col items-center justify-center backface-hidden group-hover:scale-[1.02] transition-transform">
-                  <span className="text-gray-400 font-bold uppercase tracking-widest text-sm mb-4">Question</span>
-                  <h3 className="text-4xl font-black text-gray-800 text-center px-6">{currentAnswers[flashcardIdx]?.question}</h3>
-                  <p className="mt-8 text-gray-400 font-medium text-sm">Click to flip</p>
-                </div>
-                <div className="absolute w-full h-full bg-[#E8F5E9] rounded-[2.5rem] card-shadow border-thin flex flex-col items-center justify-center backface-hidden rotate-y-180">
-                  <span className="text-[#2D5A27]/60 font-bold uppercase tracking-widest text-sm mb-4">Answer</span>
-                  <h3 className="text-4xl font-black text-[#2D5A27] mb-2 text-center px-6">{currentAnswers[flashcardIdx]?.c2_correct}</h3>
-                  <p className="text-xl font-bold text-[#2D5A27]/80">{currentAnswers[flashcardIdx]?.c1_correct}</p>
-                </div>
-              </div>
+            <div className="w-full max-w-2xl min-h-80 bg-white rounded-[2.5rem] card-shadow border-thin flex flex-col items-center justify-center text-center p-8 cursor-pointer" onClick={() => {
+              setFlashcardFlipped(!flashcardFlipped);
+              if (!flashcardFlipped) playAudio(currentAnswers[flashcardIdx]?.c2_correct || '');
+            }}>
+              <span className="text-gray-400 font-bold uppercase tracking-widest text-sm mb-4">{flashcardFlipped ? 'Answer' : 'Question'}</span>
+              <h3 className="text-4xl font-black text-[#2D5A27]">{flashcardFlipped ? currentAnswers[flashcardIdx]?.c2_correct : currentAnswers[flashcardIdx]?.question}</h3>
+              {flashcardFlipped && <p className="text-xl font-bold text-[#2D5A27]/80 mt-3">{currentAnswers[flashcardIdx]?.c1_correct}</p>}
+              <p className="mt-8 text-gray-400 font-medium text-sm">Click to flip</p>
             </div>
             <div className="flex items-center gap-8 mt-8">
-              <button onClick={() => { setFlashcardFlipped(false); setTimeout(() => setFlashcardIdx(Math.max(0, flashcardIdx - 1)), 150); }} disabled={flashcardIdx === 0} className="px-6 py-3 font-bold text-gray-500 hover:text-gray-900 disabled:opacity-30 transition-colors">Previous</button>
+              <button onClick={() => { setFlashcardFlipped(false); setFlashcardIdx(Math.max(0, flashcardIdx - 1)); }} disabled={flashcardIdx === 0} className="px-6 py-3 font-bold text-gray-500 hover:text-gray-900 disabled:opacity-30">Previous</button>
               <span className="font-bold text-gray-400">{flashcardIdx + 1} / {currentAnswers.length}</span>
-              <button onClick={() => { if (flashcardIdx < currentAnswers.length - 1) { setFlashcardFlipped(false); setTimeout(() => setFlashcardIdx(flashcardIdx + 1), 150); } else { startQuizFromFlashcards(); } }} className="px-8 py-3 bg-[#2D5A27] text-white font-bold rounded-2xl shadow-sm hover:bg-[#1f3d1b] transition-colors">
+              <button onClick={() => {
+                if (flashcardIdx < currentAnswers.length - 1) {
+                  setFlashcardFlipped(false);
+                  setFlashcardIdx(flashcardIdx + 1);
+                } else {
+                  startQuizFromFlashcards();
+                }
+              }} className="px-8 py-3 bg-[#2D5A27] text-white font-bold rounded-2xl shadow-sm hover:bg-[#1f3d1b]">
                 {flashcardIdx === currentAnswers.length - 1 ? 'Start Quiz' : 'Next'}
               </button>
             </div>
@@ -434,7 +453,7 @@ export default function Practice() {
             <div className="p-4 border-b border-thin flex justify-between items-center bg-gray-50/50">
               <div className="font-bold text-gray-600">Testing {currentAnswers.length} items</div>
               {quizState === 'submitted' && (
-                <button onClick={() => setShowAnswers(!showAnswers)} className="flex items-center gap-2 text-gray-500 font-bold hover:text-gray-800 transition-colors bg-white px-3 py-1.5 rounded-lg border border-gray-200">
+                <button onClick={() => setShowAnswers(!showAnswers)} className="flex items-center gap-2 text-gray-500 font-bold hover:text-gray-800 bg-white px-3 py-1.5 rounded-lg border border-gray-200">
                   {showAnswers ? <EyeOff size={16} /> : <Eye size={16} />}
                   {showAnswers ? 'Hide Answers' : 'Show Answers'}
                 </button>
@@ -447,7 +466,7 @@ export default function Practice() {
                     <th className="p-4 font-bold text-gray-500 w-12 text-center">No.</th>
                     <th className="p-4 font-bold text-gray-500 w-1/4">Question</th>
                     <th className="p-4 font-bold text-gray-500">Type</th>
-                    <th className="p-4 font-bold text-gray-500">{mode === 'Foreign' ? 'Word / Phrase' : 'Meaning'}</th>
+                    <th className="p-4 font-bold text-gray-500">{mode === 'Foreign' ? 'Word / Collocation' : 'Meaning'}</th>
                     <th className="p-4 font-bold text-gray-500">Synonym <span className="text-xs font-medium text-gray-400">optional</span></th>
                     {showAnswers && <th className="p-4 font-bold text-gray-500 bg-[#F0FDF4]">Correct Answer</th>}
                   </tr>
@@ -457,9 +476,15 @@ export default function Practice() {
                     <tr key={ans.id} className="hover:bg-gray-50/50">
                       <td className="p-4 text-center font-bold text-gray-400">{idx + 1}</td>
                       <td className="p-4 font-bold text-gray-800">{ans.question}</td>
-                      <td className="p-4"><input id={`input-c1-${idx}`} value={ans.c1_answer || ''} onChange={(e) => updateAnswer(ans.id, 'c1_answer', e.target.value)} onKeyDown={(e) => handleKeyDown(e, idx, 'c1')} disabled={quizState === 'submitted'} className={`w-full px-3 py-2 bg-gray-50 border rounded-xl font-medium focus:outline-none ${quizState === 'submitted' ? (ans.c1_isCorrect ? 'border-green-400 bg-green-50 text-green-700' : 'border-red-300 bg-red-50 text-red-700') : 'border-gray-200 focus:border-[#4ADE80]'}`} /></td>
-                      <td className="p-4"><input id={`input-c2-${idx}`} value={ans.c2_answer || ''} onChange={(e) => updateAnswer(ans.id, 'c2_answer', e.target.value)} onKeyDown={(e) => handleKeyDown(e, idx, 'c2')} disabled={quizState === 'submitted'} className={`w-full px-3 py-2 bg-gray-50 border rounded-xl font-medium focus:outline-none ${quizState === 'submitted' ? (ans.c2_isCorrect ? 'border-green-400 bg-green-50 text-green-700' : 'border-red-300 bg-red-50 text-red-700') : 'border-gray-200 focus:border-[#4ADE80]'}`} /></td>
-                      <td className="p-4"><input id={`input-c3-${idx}`} value={ans.c3_answer || ''} onChange={(e) => updateAnswer(ans.id, 'c3_answer', e.target.value)} onKeyDown={(e) => handleKeyDown(e, idx, 'c3')} disabled={quizState === 'submitted'} placeholder="optional" className={`w-full px-3 py-2 bg-gray-50 border rounded-xl font-medium focus:outline-none ${quizState === 'submitted' ? (ans.c3_isCorrect ? 'border-green-400 bg-green-50 text-green-700' : 'border-red-300 bg-red-50 text-red-700') : 'border-gray-200 focus:border-[#4ADE80]'}`} /></td>
+                      <td className="p-4">
+                        <input id={`input-c1-${idx}`} type="text" value={ans.c1_answer || ''} onChange={(e) => updateAnswer(ans.id, 'c1_answer', e.target.value)} onKeyDown={(e) => handleKeyDown(e, idx, 'c1')} disabled={quizState === 'submitted'} className={`w-full px-3 py-2 bg-gray-50 border rounded-xl font-medium focus:outline-none ${quizState === 'submitted' ? (ans.c1_isCorrect ? 'border-green-400 bg-green-50 text-green-700' : 'border-red-300 bg-red-50 text-red-700') : 'border-gray-200 focus:border-[#4ADE80]'}`} />
+                      </td>
+                      <td className="p-4">
+                        <input id={`input-c2-${idx}`} type="text" value={ans.c2_answer || ''} onChange={(e) => updateAnswer(ans.id, 'c2_answer', e.target.value)} onKeyDown={(e) => handleKeyDown(e, idx, 'c2')} disabled={quizState === 'submitted'} className={`w-full px-3 py-2 bg-gray-50 border rounded-xl font-medium focus:outline-none ${quizState === 'submitted' ? (ans.c2_isCorrect ? 'border-green-400 bg-green-50 text-green-700' : 'border-red-300 bg-red-50 text-red-700') : 'border-gray-200 focus:border-[#4ADE80]'}`} />
+                      </td>
+                      <td className="p-4">
+                        <input id={`input-c3-${idx}`} type="text" value={ans.c3_answer || ''} onChange={(e) => updateAnswer(ans.id, 'c3_answer', e.target.value)} onKeyDown={(e) => handleKeyDown(e, idx, 'c3')} disabled={quizState === 'submitted'} placeholder="optional" className={`w-full px-3 py-2 bg-gray-50 border rounded-xl font-medium focus:outline-none ${quizState === 'submitted' ? (ans.c3_isCorrect ? 'border-green-400 bg-green-50 text-green-700' : 'border-red-300 bg-red-50 text-red-700') : 'border-gray-200 focus:border-[#4ADE80]'}`} />
+                      </td>
                       {showAnswers && (
                         <td className="p-4 bg-[#F0FDF4]">
                           <div className="font-bold text-green-700">{ans.c2_correct}</div>

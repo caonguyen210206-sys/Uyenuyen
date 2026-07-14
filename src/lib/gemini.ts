@@ -1,8 +1,15 @@
 import type { MiniQuiz, VocabItem } from '../types';
 import { normalizeBand, normalizeWord } from './vocabUtils';
 
-const MODEL_CANDIDATES = ["gemini-3.5-pro", "gemini-3.5-flash"];
-const CACHE_VERSION = "v6";
+const MODEL_CANDIDATES = [
+  "gemini-3.1-pro",
+  "gemini-2.5-pro",
+  "gemini-3.5-flash",
+  "gemini-3.1-flash-lite",
+  "gemini-2.5-flash-lite",
+  "gemini-2.5-flash",
+];
+const CACHE_VERSION = "v7";
 
 type VocabPayload = {
   correctedWord?: string;
@@ -139,7 +146,9 @@ function shouldTryNextModel(status: number, message: string) {
     || lower.includes('temporarily')
     || lower.includes('not found')
     || lower.includes('unsupported')
-    || lower.includes('unavailable');
+    || lower.includes('unavailable')
+    || lower.includes('quota')
+    || lower.includes('rate limit');
 }
 
 async function callGeminiModel(apiKey: string, model: string, prompt: string) {
@@ -181,11 +190,11 @@ async function generateJson(apiKey: string | undefined, prompt: string, cacheId?
   }
 
   const key = requireApiKey(apiKey);
-  let lastMessage = '';
+  const failedModels: string[] = [];
 
   for (let attempt = 0; attempt < MODEL_CANDIDATES.length; attempt++) {
     const model = MODEL_CANDIDATES[attempt];
-    if (attempt > 0) await delay(500);
+    if (attempt > 0) await delay(450);
 
     try {
       const parsed = await callGeminiModel(key, model, prompt);
@@ -194,25 +203,23 @@ async function generateJson(apiKey: string | undefined, prompt: string, cacheId?
     } catch (err: any) {
       const status = Number(err?.status || 0);
       const message = String(err?.message || 'Gemini API chưa phản hồi.');
-      lastMessage = `${model}: ${message}`;
-
-      if (attempt < MODEL_CANDIDATES.length - 1 && shouldTryNextModel(status, message)) {
-        continue;
-      }
+      failedModels.push(`${model}: ${message}`);
 
       if (status === 401 || status === 403) {
         throw new Error('Gemini API Key không hợp lệ hoặc chưa có quyền dùng model này. Hãy kiểm tra lại key trong Settings.');
       }
 
-      if (message.toLowerCase().includes('high demand')) {
-        throw new Error('Gemini đang quá tải tạm thời. App đã thử Gemini Pro và Flash nhưng vẫn bận. Đợi một chút rồi bấm lại Auto Define.');
+      if (attempt < MODEL_CANDIDATES.length - 1 && shouldTryNextModel(status, message)) {
+        continue;
       }
 
-      throw new Error(message);
+      if (attempt < MODEL_CANDIDATES.length - 1) {
+        continue;
+      }
     }
   }
 
-  throw new Error(`Gemini đang bận hoặc model chưa khả dụng. Đã thử Gemini Pro và Flash. ${lastMessage}`);
+  throw new Error(`Gemini đang bận hoặc key bị giới hạn. App đã thử nhiều model gồm Pro, Flash-Lite và Flash. Chi tiết: ${failedModels.slice(-2).join(' | ')}`);
 }
 
 export async function defineWord(word: string, apiKey?: string): Promise<VocabPayload> {

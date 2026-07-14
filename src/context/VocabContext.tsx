@@ -34,7 +34,12 @@ interface VocabContextType {
   refreshData: () => Promise<void>;
 }
 
-const defaultSettings: UserSettings = { apiKey: '', defaultQuestions: 10, defaultCriteria: ['Meaning', 'Word Type', 'Synonyms'] };
+const defaultSettings: UserSettings = {
+  apiKey: '',
+  defaultQuestions: 10,
+  defaultCriteria: ['Meaning', 'Word Type', 'Synonyms'],
+  defaultCollocationsSeeded: false,
+};
 
 const VocabContext = createContext<VocabContextType | undefined>(undefined);
 
@@ -72,15 +77,25 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
         getQuizSessions(),
         getSettings()
       ]);
-      const { mergedCollocations, addedDefaultCount } = mergeDefaultCollocations(fetchedCollocations);
+
+      const shouldSeedDefaults = !fetchedSettings.defaultCollocationsSeeded;
+      const { mergedCollocations, addedDefaultCount } = shouldSeedDefaults
+        ? mergeDefaultCollocations(fetchedCollocations)
+        : { mergedCollocations: fetchedCollocations, addedDefaultCount: 0 };
+      const nextSettings = shouldSeedDefaults
+        ? { ...fetchedSettings, defaultCollocationsSeeded: true }
+        : fetchedSettings;
 
       setItems(fetchedItems);
       setCollocations(mergedCollocations);
       setSessions(fetchedSessions);
-      setSettings(fetchedSettings);
+      setSettings(nextSettings);
 
-      if (addedDefaultCount > 0) {
-        await saveCollocationItems(mergedCollocations);
+      if (shouldSeedDefaults) {
+        if (addedDefaultCount > 0) {
+          await saveCollocationItems(mergedCollocations);
+        }
+        await saveSettings(nextSettings);
       }
     } catch (error) {
       console.error("Error fetching data:", error);

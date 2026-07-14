@@ -9,6 +9,7 @@ import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import Library from './components/Library';
 import VocabList from './components/VocabList';
+import Collocations from './components/Collocations';
 import Practice from './components/Practice';
 import MonthlyReview from './components/MonthlyReview';
 import Settings from './components/Settings';
@@ -119,6 +120,9 @@ export default function App() {
             </div>
             <div className={currentView === 'vocab-list' ? 'block' : 'hidden'}>
               <VocabList />
+            </div>
+            <div className={currentView === 'collocations' ? 'block' : 'hidden'}>
+              <Collocations setCurrentView={setCurrentView} />
             </div>
             <div className={currentView === 'practice' ? 'block' : 'hidden'}>
               <Practice />

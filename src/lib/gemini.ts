@@ -1,8 +1,8 @@
 import type { MiniQuiz, VocabItem } from '../types';
 import { normalizeBand, normalizeWord } from './vocabUtils';
 
-const MODEL = "gemini-3.5-flash";
-const CACHE_VERSION = "v5";
+const MODEL_CANDIDATES = ["gemini-3.5-pro", "gemini-3.5-flash"];
+const CACHE_VERSION = "v6";
 
 type VocabPayload = {
   correctedWord?: string;
@@ -107,6 +107,10 @@ function writeCache(key: string, value: unknown) {
   }
 }
 
+function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 function extractInteractionText(payload: any) {
   if (typeof payload?.output_text === "string") {
     return payload.output_text;
@@ -127,21 +131,26 @@ function extractInteractionText(payload: any) {
   return "";
 }
 
-async function generateJson(apiKey: string | undefined, prompt: string, cacheId?: string) {
-  if (cacheId) {
-    const cached = readCache<unknown>(cacheId);
-    if (cached) return cached;
-  }
+function shouldTryNextModel(status: number, message: string) {
+  const lower = message.toLowerCase();
+  return [400, 404, 429, 503].includes(status)
+    || lower.includes('high demand')
+    || lower.includes('overloaded')
+    || lower.includes('temporarily')
+    || lower.includes('not found')
+    || lower.includes('unsupported')
+    || lower.includes('unavailable');
+}
 
-  const key = requireApiKey(apiKey);
+async function callGeminiModel(apiKey: string, model: string, prompt: string) {
   const response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-goog-api-key": key,
+      "x-goog-api-key": apiKey,
     },
     body: JSON.stringify({
-      model: MODEL,
+      model,
       store: false,
       input: `${prompt}\n\n${BAND_GUIDE}\nReturn JSON only. Keep values concise but complete.`,
     }),
@@ -151,31 +160,65 @@ async function generateJson(apiKey: string | undefined, prompt: string, cacheId?
 
   if (!response.ok) {
     const message = payload?.error?.message || `Gemini API lỗi HTTP ${response.status}.`;
-    throw new Error(message);
+    const error = new Error(message) as Error & { status?: number; model?: string };
+    error.status = response.status;
+    error.model = model;
+    throw error;
   }
 
   const text = extractInteractionText(payload);
   if (!text) {
-    throw new Error("Gemini không trả về dữ liệu.");
+    throw new Error(`${model} không trả về dữ liệu.`);
   }
 
-  const parsed = parseJsonResponse(text);
-  if (cacheId) writeCache(cacheId, parsed);
-  return parsed;
+  return parseJsonResponse(text);
+}
+
+async function generateJson(apiKey: string | undefined, prompt: string, cacheId?: string) {
+  if (cacheId) {
+    const cached = readCache<unknown>(cacheId);
+    if (cached) return cached;
+  }
+
+  const key = requireApiKey(apiKey);
+  let lastMessage = '';
+
+  for (let attempt = 0; attempt < MODEL_CANDIDATES.length; attempt++) {
+    const model = MODEL_CANDIDATES[attempt];
+    if (attempt > 0) await delay(500);
+
+    try {
+      const parsed = await callGeminiModel(key, model, prompt);
+      if (cacheId) writeCache(cacheId, parsed);
+      return parsed;
+    } catch (err: any) {
+      const status = Number(err?.status || 0);
+      const message = String(err?.message || 'Gemini API chưa phản hồi.');
+      lastMessage = `${model}: ${message}`;
+
+      if (attempt < MODEL_CANDIDATES.length - 1 && shouldTryNextModel(status, message)) {
+        continue;
+      }
+
+      if (status === 401 || status === 403) {
+        throw new Error('Gemini API Key không hợp lệ hoặc chưa có quyền dùng model này. Hãy kiểm tra lại key trong Settings.');
+      }
+
+      if (message.toLowerCase().includes('high demand')) {
+        throw new Error('Gemini đang quá tải tạm thời. App đã thử Gemini Pro và Flash nhưng vẫn bận. Đợi một chút rồi bấm lại Auto Define.');
+      }
+
+      throw new Error(message);
+    }
+  }
+
+  throw new Error(`Gemini đang bận hoặc model chưa khả dụng. Đã thử Gemini Pro và Flash. ${lastMessage}`);
 }
 
 export async function defineWord(word: string, apiKey?: string): Promise<VocabPayload> {
   const prompt = `Define this English word for a Vietnamese IELTS learner: "${word}".
 If misspelled, fix it in correctedWord; otherwise correctedWord is the original word.
-Return one compact JSON object with exactly these fields: correctedWord, ipa, wordType, meaning, definition, example, synonyms, antonyms, band, topic, miniQuiz.
-miniQuiz must be an object with exactly these fields:
-- fillBlankQuestion: one sentence with one blank shown as _____
-- fillBlankAnswer: the target word
-- multipleChoiceQuestion: a short question testing meaning or usage
-- multipleChoiceOptions: exactly 4 answer options
-- multipleChoiceAnswer: the correct option text
-- rewritePrompt: one Vietnamese or English prompt asking the learner to use the word in a new sentence
-- rewriteAnswer: one natural model answer.`;
+Return one compact JSON object with exactly these fields: correctedWord, ipa, wordType, meaning, definition, example, synonyms, antonyms, band, topic.`;
 
   return normalizeVocabPayload(await generateJson(apiKey, prompt, cacheKey('define', word)));
 }

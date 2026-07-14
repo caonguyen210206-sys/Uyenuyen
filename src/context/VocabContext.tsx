@@ -17,6 +17,8 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { DEFAULT_COLLOCATIONS } from '../data/defaultCollocations';
 import { normalizeWord } from '../lib/vocabUtils';
 
+const PRACTICE_SELECTION_STORAGE_KEY = 'uyenuyen-practice-selection';
+
 interface VocabContextType {
   items: VocabItem[];
   collocations: CollocationItem[];
@@ -58,6 +60,26 @@ function mergeDefaultCollocations(fetchedCollocations: CollocationItem[]) {
       : fetchedCollocations,
     addedDefaultCount: defaultItemsToAdd.length,
   };
+}
+
+function rememberNewCollocationsForPractice(previousItems: VocabItem[], nextItems: VocabItem[]) {
+  const previousIds = new Set(previousItems.map(item => item.id));
+  const newCollocationIds = nextItems
+    .filter(item => !previousIds.has(item.id) && item.source === 'Collocation')
+    .map(item => item.id);
+
+  if (newCollocationIds.length === 0) return;
+
+  try {
+    sessionStorage.setItem(PRACTICE_SELECTION_STORAGE_KEY, JSON.stringify({
+      ids: newCollocationIds,
+      label: `${newCollocationIds.length} selected collocations`,
+      source: 'collocation',
+      createdAt: Date.now(),
+    }));
+  } catch {
+    // Practice handoff is optional. Ignore browser storage errors.
+  }
 }
 
 export const VocabProvider = ({ children }: { children: ReactNode }) => {
@@ -121,11 +143,13 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
 
   const addVocabItem = async (item: VocabItem) => {
     const newItems = [...items, item];
+    rememberNewCollocationsForPractice(items, newItems);
     setItems(newItems);
     await saveVocabItems(newItems);
   };
 
   const updateVocabItems = async (newItems: VocabItem[]) => {
+    rememberNewCollocationsForPractice(items, newItems);
     setItems(newItems);
     await saveVocabItems(newItems);
   };

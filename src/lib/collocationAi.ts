@@ -2,12 +2,13 @@ import type { CollocationItem } from '../types';
 import { normalizeBand, normalizeWord } from './vocabUtils';
 
 const MODEL_CANDIDATES = [
-  'gemini-3.1-pro',
-  'gemini-2.5-pro',
-  'gemini-3.5-flash',
   'gemini-3.1-flash-lite',
   'gemini-2.5-flash-lite',
+  'gemini-2.0-flash-lite',
   'gemini-2.5-flash',
+  'gemini-3.5-flash',
+  'gemini-2.5-pro',
+  'gemini-3.1-pro',
 ];
 
 const BAND_GUIDE = `Band estimates IELTS collocation difficulty, not essay score.
@@ -50,6 +51,15 @@ function extractGenerateContentText(payload: any) {
     .join('\n');
 }
 
+function isQuotaMessage(message: string) {
+  const lower = message.toLowerCase();
+  return lower.includes('quota')
+    || lower.includes('rate limit')
+    || lower.includes('resource_exhausted')
+    || lower.includes('free_tier')
+    || lower.includes('exceeded');
+}
+
 function shouldTryNextModel(status: number, message: string) {
   const lower = message.toLowerCase();
   return [400, 404, 429, 503].includes(status)
@@ -58,7 +68,8 @@ function shouldTryNextModel(status: number, message: string) {
     || lower.includes('temporarily')
     || lower.includes('not found')
     || lower.includes('unsupported')
-    || lower.includes('unavailable');
+    || lower.includes('unavailable')
+    || isQuotaMessage(message);
 }
 
 function normalizeCollocation(item: CollocationPayload): CollocationPayload | null {
@@ -135,10 +146,11 @@ async function callGeminiModel(apiKey: string, model: string, prompt: string, im
 async function generateJson(apiKey: string | undefined, prompt: string, image?: ImageInput) {
   const key = requireApiKey(apiKey);
   let lastMessage = '';
+  let sawQuotaError = false;
 
   for (let attempt = 0; attempt < MODEL_CANDIDATES.length; attempt++) {
     const model = MODEL_CANDIDATES[attempt];
-    if (attempt > 0) await delay(500);
+    if (attempt > 0) await delay(450);
 
     try {
       return await callGeminiModel(key, model, prompt, image);
@@ -146,20 +158,27 @@ async function generateJson(apiKey: string | undefined, prompt: string, image?: 
       const status = Number(err?.status || 0);
       const message = String(err?.message || 'Gemini API chưa phản hồi.');
       lastMessage = `${model}: ${message}`;
-
-      if (attempt < MODEL_CANDIDATES.length - 1 && shouldTryNextModel(status, message)) {
-        continue;
-      }
+      if (isQuotaMessage(message)) sawQuotaError = true;
 
       if (status === 401 || status === 403) {
         throw new Error('Gemini API Key không hợp lệ hoặc chưa có quyền dùng model này. Hãy kiểm tra lại key trong Settings.');
       }
 
-      throw new Error(message);
+      if (attempt < MODEL_CANDIDATES.length - 1 && shouldTryNextModel(status, message)) {
+        continue;
+      }
+
+      if (attempt < MODEL_CANDIDATES.length - 1) {
+        continue;
+      }
     }
   }
 
-  throw new Error(`Gemini đang bận hoặc model chưa khả dụng. Đã thử nhiều model. ${lastMessage}`);
+  if (sawQuotaError) {
+    throw new Error('Gemini API key đã hết quota free tier trong project hiện tại. Bạn cần đợi quota reset, giảm số lần import ảnh/text, hoặc bật billing trong Google AI Studio để tăng giới hạn. App đã thử nhiều model nhẹ trước khi báo lỗi.');
+  }
+
+  throw new Error(`Gemini đang bận hoặc model chưa khả dụng. Đã thử nhiều model nhẹ và model Pro. ${lastMessage}`);
 }
 
 export async function extractCollocationsFromText(text: string, apiKey?: string, mode: 'raw' | 'paragraph' = 'paragraph') {

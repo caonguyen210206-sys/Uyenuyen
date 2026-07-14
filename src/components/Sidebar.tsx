@@ -1,6 +1,6 @@
 import { ViewState } from '../types';
 import { cn } from '../lib/utils';
-import { Home, LibraryBig, ListTodo, PenTool, CalendarDays, Settings as SettingsIcon, Sprout } from 'lucide-react';
+import { Home, LibraryBig, ListTodo, PenTool, CalendarDays, Settings as SettingsIcon, Sprout, Link2 } from 'lucide-react';
 
 interface SidebarProps {
   currentView: ViewState;
@@ -12,6 +12,7 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'library', label: 'Library', icon: LibraryBig },
     { id: 'vocab-list', label: 'Vocab List', icon: ListTodo },
+    { id: 'collocations', label: 'Collocation', icon: Link2 },
     { id: 'practice', label: 'Practice', icon: PenTool },
     { id: 'monthly-review', label: 'Monthly Review', icon: CalendarDays },
     { id: 'settings', label: 'Settings', icon: SettingsIcon },

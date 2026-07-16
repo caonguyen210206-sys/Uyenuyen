@@ -96,7 +96,7 @@ export default function App() {
 
   if (loadingAuth) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#FAF9F6]">
+      <div className="flex min-h-[100dvh] items-center justify-center bg-[#FAF9F6]">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500"></div>
       </div>
     );
@@ -104,7 +104,7 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#FAF9F6] p-4">
+      <div className="flex min-h-[100dvh] items-center justify-center bg-[#FAF9F6] p-4">
         <div className="bg-white p-8 sm:p-10 rounded-[2rem] card-shadow border border-pink-100 flex flex-col items-center text-center max-w-sm w-full">
           <div className="w-20 h-20 bg-pink-100 rounded-full flex items-center justify-center mb-6">
             <Sparkles className="text-pink-500 w-10 h-10" />
@@ -161,7 +161,7 @@ export default function App() {
 
   return (
     <VocabProvider>
-      <div className="flex h-screen bg-[#FAF9F6] text-gray-800 font-sans overflow-hidden relative">
+      <div className="flex h-[100dvh] bg-[#FAF9F6] text-gray-800 font-sans overflow-hidden relative">
         {showGreeting && (
           <div className="absolute top-20 lg:top-10 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-10 fade-in duration-500 w-[calc(100%-2rem)] max-w-md lg:w-auto lg:max-w-none">
             <div className="bg-white px-5 lg:px-8 py-3 lg:py-4 rounded-full shadow-lg border-2 border-pink-200 flex items-center justify-center gap-3 text-center">
@@ -187,7 +187,7 @@ export default function App() {
         />
 
         <main className="flex-1 overflow-y-auto p-4 pt-20 lg:p-8 min-w-0">
-          <div className="max-w-6xl mx-auto min-h-full">
+          <div className="w-full max-w-6xl mx-auto min-h-full">
             <div className={currentView === 'dashboard' ? 'block' : 'hidden'}>
               <Dashboard setCurrentView={setCurrentView} />
             </div>

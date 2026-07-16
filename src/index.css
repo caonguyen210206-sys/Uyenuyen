@@ -10,6 +10,19 @@
   body {
     @apply bg-[#FAF9F6] text-gray-800 antialiased;
   }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+  }
 }
 
 @layer utilities {
@@ -30,5 +43,136 @@
   }
   .rotate-y-180 {
     transform: rotateY(180deg);
+  }
+}
+
+@media (max-width: 1024px) {
+  main .flex.gap-8.h-full {
+    flex-direction: column !important;
+  }
+
+  main .w-80 {
+    width: 100% !important;
+  }
+
+  main header.flex {
+    align-items: stretch !important;
+    flex-direction: column !important;
+  }
+
+  main header > div:last-child {
+    justify-content: stretch !important;
+    width: 100% !important;
+  }
+
+  main header button,
+  main header a {
+    justify-content: center !important;
+  }
+}
+
+@media (max-width: 768px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+
+  main h2 {
+    font-size: 1.75rem !important;
+    line-height: 2.1rem !important;
+  }
+
+  main h3 {
+    font-size: 1.15rem !important;
+  }
+
+  main table {
+    min-width: 760px;
+    font-size: 0.9rem;
+  }
+
+  main th,
+  main td {
+    padding: 0.75rem !important;
+  }
+
+  main .grid.grid-cols-3,
+  main .grid.grid-cols-2 {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  main .flex.items-center.gap-3,
+  main .flex.justify-between.items-center,
+  main .flex.justify-between.items-end,
+  main .flex.items-start.justify-between {
+    align-items: stretch !important;
+    flex-direction: column !important;
+  }
+
+  main button,
+  main select,
+  main input[type="text"],
+  main input[type="password"] {
+    min-height: 44px;
+  }
+
+  main header button,
+  main header a,
+  main .bg-white.rounded-\[2rem\] button,
+  main .bg-white.rounded-\[2rem\] select {
+    width: 100%;
+  }
+
+  main .rounded-\[2\.5rem\],
+  main .rounded-\[2rem\] {
+    border-radius: 1.25rem !important;
+  }
+
+  main .card-shadow {
+    box-shadow: 0 6px 18px rgba(0,0,0,0.04);
+  }
+
+  main .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  main .max-h-64 {
+    max-height: 55vh !important;
+  }
+
+  .fixed.inset-0 .bg-white {
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  main {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  main table {
+    min-width: 680px;
+  }
+
+  main .p-8,
+  main .p-6,
+  main .p-5 {
+    padding: 1rem !important;
+  }
+
+  main .px-8,
+  main .px-6,
+  main .px-5 {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  main .py-4,
+  main .py-3 {
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.75rem !important;
   }
 }

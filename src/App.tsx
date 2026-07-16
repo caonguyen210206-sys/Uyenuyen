@@ -13,7 +13,7 @@ import Collocations from './components/Collocations';
 import Practice from './components/Practice';
 import MonthlyReview from './components/MonthlyReview';
 import Settings from './components/Settings';
-import { Sparkles, LogIn } from 'lucide-react';
+import { Sparkles, LogIn, Menu } from 'lucide-react';
 import { auth, googleProvider, signInWithPopup, onAuthStateChanged, User } from './lib/firebase';
 import { VocabProvider } from './context/VocabContext';
 
@@ -23,6 +23,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [loginError, setLoginError] = useState('');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowGreeting(false), 3000);
@@ -69,8 +70,8 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#FAF9F6]">
-        <div className="bg-white p-10 rounded-[2rem] card-shadow border border-pink-100 flex flex-col items-center text-center max-w-sm">
+      <div className="flex min-h-screen items-center justify-center bg-[#FAF9F6] p-4">
+        <div className="bg-white p-8 sm:p-10 rounded-[2rem] card-shadow border border-pink-100 flex flex-col items-center text-center max-w-sm w-full">
           <div className="w-20 h-20 bg-pink-100 rounded-full flex items-center justify-center mb-6">
             <Sparkles className="text-pink-500 w-10 h-10" />
           </div>
@@ -97,18 +98,31 @@ export default function App() {
     <VocabProvider>
       <div className="flex h-screen bg-[#FAF9F6] text-gray-800 font-sans overflow-hidden relative">
         {showGreeting && (
-          <div className="absolute top-10 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-10 fade-in duration-500">
-            <div className="bg-white px-8 py-4 rounded-full shadow-lg border-2 border-pink-200 flex items-center gap-3">
-              <Sparkles className="text-pink-400" size={24} />
-              <span className="text-pink-500 font-extrabold text-lg">Chúc bạn học bài tốt!</span>
+          <div className="absolute top-20 lg:top-10 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-10 fade-in duration-500 w-[calc(100%-2rem)] max-w-md lg:w-auto lg:max-w-none">
+            <div className="bg-white px-5 lg:px-8 py-3 lg:py-4 rounded-full shadow-lg border-2 border-pink-200 flex items-center justify-center gap-3 text-center">
+              <Sparkles className="text-pink-400 shrink-0" size={22} />
+              <span className="text-pink-500 font-extrabold text-sm lg:text-lg">Chúc bạn học bài tốt!</span>
             </div>
           </div>
         )}
 
-        <Sidebar currentView={currentView} setCurrentView={setCurrentView} />
+        <button
+          aria-label="Mở menu"
+          onClick={() => setIsMobileMenuOpen(true)}
+          className="fixed top-4 left-4 z-40 lg:hidden w-12 h-12 rounded-2xl bg-white text-[#2D5A27] border border-[#D0E8D0] shadow-lg flex items-center justify-center active:scale-95"
+        >
+          <Menu size={24} />
+        </button>
 
-        <main className="flex-1 overflow-y-auto p-8">
-          <div className="max-w-6xl mx-auto h-full">
+        <Sidebar
+          currentView={currentView}
+          setCurrentView={setCurrentView}
+          isOpen={isMobileMenuOpen}
+          onClose={() => setIsMobileMenuOpen(false)}
+        />
+
+        <main className="flex-1 overflow-y-auto p-4 pt-20 lg:p-8 min-w-0">
+          <div className="max-w-6xl mx-auto min-h-full">
             <div className={currentView === 'dashboard' ? 'block' : 'hidden'}>
               <Dashboard setCurrentView={setCurrentView} />
             </div>

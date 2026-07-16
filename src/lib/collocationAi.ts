@@ -89,6 +89,76 @@ function normalizeCollocationArray(data: unknown): CollocationPayload[] {
     .filter(Boolean) as CollocationPayload[];
 }
 
+function cleanRawLine(line: string) {
+  return line
+    .replace(/^\s*(?:\d+|[IVXLCDM]+)[\).\-:]\s+/i, '')
+    .replace(/^\s*[-•*]\s+/, '')
+    .trim();
+}
+
+function splitRawLine(line: string) {
+  const cleaned = cleanRawLine(line);
+  if (!cleaned) return null;
+
+  const delimiterPatterns = [
+    /\t+/,                 // table copy
+    /\s{2,}/,              // two-column text copied from PDF/image
+    /\s+[–—-]\s+/,         // phrase - meaning / phrase – meaning
+    /\s*[:：]\s+/,          // phrase: meaning
+  ];
+
+  for (const pattern of delimiterPatterns) {
+    const parts = cleaned.split(pattern).map(part => part.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      return {
+        phrase: parts[0],
+        meaning: parts.slice(1).join(' '),
+      };
+    }
+  }
+
+  return {
+    phrase: cleaned,
+    meaning: '',
+  };
+}
+
+function looksLikeUsefulPhrase(phrase: string) {
+  const words = phrase.trim().split(/\s+/).filter(Boolean);
+  if (words.length < 2) return false;
+  if (phrase.length > 90) return false;
+  return /[a-z]/i.test(phrase);
+}
+
+function parseRawCollocationList(text: string): CollocationPayload[] {
+  const lines = text
+    .split(/\r?\n/)
+    .map(splitRawLine)
+    .filter(Boolean) as Array<{ phrase: string; meaning: string }>;
+
+  const parsed: CollocationPayload[] = [];
+  const seen = new Set<string>();
+
+  lines.forEach((item) => {
+    const phrase = item.phrase.trim();
+    const key = normalizeWord(phrase);
+    if (!key || seen.has(key) || !looksLikeUsefulPhrase(phrase)) return;
+    seen.add(key);
+
+    parsed.push({
+      phrase,
+      meaning: item.meaning.trim(),
+      definition: item.meaning.trim(),
+      structure: 'IELTS Writing collocation',
+      example: '',
+      topic: 'IELTS Writing',
+      band: '6.5',
+    });
+  });
+
+  return parsed;
+}
+
 function buildQuotaError() {
   return new Error(
     'Gemini API key đã hết quota free tier trong project hiện tại. Để tiết kiệm quota, app đã dừng retry. Hãy nhập thủ công vài collocation, import text ngắn hơn, tránh import ảnh liên tục, đợi quota reset hoặc bật billing cho project API.'
@@ -182,12 +252,20 @@ async function generateJson(apiKey: string | undefined, prompt: string, image?: 
 }
 
 export async function extractCollocationsFromText(text: string, apiKey?: string, mode: 'raw' | 'paragraph' = 'paragraph') {
+  if (mode === 'raw') {
+    const parsed = parseRawCollocationList(text);
+    if (parsed.length > 0) return parsed.slice(0, 80);
+  }
+
   const prompt = mode === 'raw'
     ? `Extract English collocations from this raw vocabulary/collocation list for a Vietnamese IELTS learner.
-Return a JSON array with at most 10 items. Each item must have exactly: phrase, meaning, definition, structure, example, topic, band.
+IMPORTANT: Preserve the full phrase exactly as written in the input. Do not shorten a long collocation to its head word or a shorter phrase. If a line is "make a significant contribution - đóng góp đáng kể", phrase must be exactly "make a significant contribution".
+Prefer multi-word collocations of 2-7 words. Do not output single words unless the input itself is a single word.
+Return a JSON array with at most 20 items. Each item must have exactly: phrase, meaning, definition, structure, example, topic, band.
 Raw input: ${text}`
     : `Extract 5-10 useful English collocations from this paragraph for a Vietnamese IELTS learner.
 Focus on natural word combinations, not single words.
+Keep complete collocations such as "play a vital role" or "make a significant contribution"; do not shorten them to "play a role" or "contribution".
 Return a JSON array. Each item must have exactly: phrase, meaning, definition, structure, example, topic, band.
 Paragraph: ${text}`;
 
@@ -197,7 +275,7 @@ Paragraph: ${text}`;
 export async function extractCollocationsFromImage(image: ImageInput, apiKey?: string) {
   const prompt = `Read this image and extract 5-10 useful English collocations for a Vietnamese IELTS learner.
 The image may be a textbook page, notes, screenshot, or vocabulary list.
-Extract collocations, not single words when possible.
+Extract complete collocations, not single words when possible. Preserve long collocations exactly as shown in the image.
 Return a JSON array. Each item must have exactly: phrase, meaning, definition, structure, example, topic, band.`;
 
   return normalizeCollocationArray(await generateJson(apiKey, prompt, image));

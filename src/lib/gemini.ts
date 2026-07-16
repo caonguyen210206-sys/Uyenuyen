@@ -6,7 +6,7 @@ const MODEL_CANDIDATES = [
   "gemini-3.1-flash-lite",
   "gemini-2.5-flash-lite",
 ];
-const CACHE_VERSION = "v9";
+const CACHE_VERSION = "v10";
 
 type VocabPayload = {
   correctedWord?: string;
@@ -260,11 +260,17 @@ Return one JSON object with exactly: fillBlankQuestion, fillBlankAnswer, multipl
 }
 
 export async function processRawText(rawText: string, apiKey?: string): Promise<VocabPayload[]> {
-  const prompt = `Extract vocabulary from this raw text for a Vietnamese IELTS learner.
-Return a JSON array with at most 10 items. Each item must have: word, ipa, wordType, meaning, definition, example, synonyms, antonyms, band, topic.
+  const prompt = `Extract vocabulary items and collocations from this raw text for a Vietnamese IELTS learner.
+IMPORTANT: If the input contains a multi-word phrase/collocation, keep the full phrase exactly in the word field. Do not shorten it to one word or to a smaller phrase.
+Examples:
+- "make a significant contribution" must remain "make a significant contribution", not "contribution".
+- "play a vital role" must remain "play a vital role", not "role".
+If the input line already has meaning after a dash/colon/tab, preserve the phrase before the delimiter exactly.
+Return a JSON array with at most 20 items. Each item must have: word, ipa, wordType, meaning, definition, example, synonyms, antonyms, band, topic.
+For multi-word phrases, use wordType "collocation" or "phrase".
 Text: ${rawText}`;
 
-  return normalizeVocabArray(await generateJson(apiKey, prompt, cacheKey('raw', rawText)));
+  return normalizeVocabArray(await generateJson(apiKey, prompt, cacheKey('raw-long-phrases', rawText)));
 }
 
 export async function extractVocabFromParagraph(paragraph: string, apiKey?: string): Promise<VocabPayload[]> {

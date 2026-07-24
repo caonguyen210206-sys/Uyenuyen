@@ -1,4 +1,4 @@
-export type ViewState = 'dashboard' | 'library' | 'vocab-list' | 'collocations' | 'practice' | 'monthly-review' | 'settings';
+export type ViewState = 'dashboard' | 'library' | 'vocab-list' | 'collocations' | 'crime-collocations' | 'practice' | 'monthly-review' | 'settings';
 
 export type VocabStatus = 'Storage' | 'Studying' | 'Completed';
 export type MasteryLevel = 'New' | 'Beginner' | 'Advanced' | 'Mastery';
@@ -68,9 +68,8 @@ export interface QuizSession {
 export interface QuizAnswer {
   id: string;
   vocabItemId: string;
-  question: string; // The prompt shown
-  
-  // For each criteria
+  question: string;
+
   c1_type?: string;
   c1_answer?: string;
   c1_correct?: string;
@@ -80,7 +79,7 @@ export interface QuizAnswer {
   c2_answer?: string;
   c2_correct?: string;
   c2_isCorrect?: boolean | 'partial';
-  
+
   c3_type?: string;
   c3_answer?: string;
   c3_correct?: string;
@@ -92,5 +91,6 @@ export interface UserSettings {
   defaultQuestions: number;
   defaultCriteria: string[];
   defaultCollocationsSeeded?: boolean;
+  crimeCollocationsSeeded?: boolean;
   ownerId?: string;
 }

@@ -92,5 +92,6 @@ export interface UserSettings {
   defaultCriteria: string[];
   defaultCollocationsSeeded?: boolean;
   crimeCollocationsSeeded?: boolean;
+  crimeCollocationsSeedVersion?: number;
   ownerId?: string;
 }

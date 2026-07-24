@@ -1,6 +1,7 @@
 import { CollocationItem } from '../types';
 
 export const CRIME_PDF_SOURCE = 'Default PDF - Crime';
+export const CRIME_PDF_VERSION = 2;
 const CRIME_CREATED_AT = 1710000000000;
 
 type CrimeEntry = readonly [
@@ -13,12 +14,18 @@ type CrimeEntry = readonly [
 
 const crimeEntries: CrimeEntry[] = [
   ['Imprisonment', 'Đi tù / sự giam giữ', 'noun', 'Crime - Types & Offenders', '6.0'],
-  ['Offender / Lawbreaker / Criminal', 'Người phạm tội / kẻ vi phạm pháp luật', 'noun variants', 'Crime - Types & Offenders', '6.0'],
-  ['Juvenile offender / Young offender', 'Tội phạm vị thành niên', 'noun phrase', 'Crime - Types & Offenders', '6.5'],
+  ['Offender', 'Người phạm tội', 'noun', 'Crime - Types & Offenders', '6.0'],
+  ['Lawbreaker', 'Kẻ vi phạm pháp luật', 'noun', 'Crime - Types & Offenders', '6.0'],
+  ['Criminal', 'Tội phạm / người phạm tội', 'noun', 'Crime - Types & Offenders', '6.0'],
+  ['Juvenile offender', 'Tội phạm vị thành niên', 'noun phrase', 'Crime - Types & Offenders', '6.5'],
+  ['Young offender', 'Tội phạm trẻ tuổi', 'noun phrase', 'Crime - Types & Offenders', '6.0'],
   ['First-time offender', 'Người phạm tội lần đầu', 'noun phrase', 'Crime - Types & Offenders', '6.5'],
-  ['Reoffender / Repeat offender', 'Người tái phạm tội', 'noun variants', 'Crime - Types & Offenders', '6.5'],
-  ['Cybercrime / Internet fraud', 'Tội phạm công nghệ cao / lừa đảo qua mạng', 'noun variants', 'Crime - Types & Offenders', '6.5'],
-  ['Minor offense / Petty crime', 'Tội nhẹ', 'noun variants', 'Crime - Types & Offenders', '6.0'],
+  ['Reoffender', 'Người tái phạm tội', 'noun', 'Crime - Types & Offenders', '6.5'],
+  ['Repeat offender', 'Người tái phạm tội', 'noun phrase', 'Crime - Types & Offenders', '6.5'],
+  ['Cybercrime', 'Tội phạm công nghệ cao', 'noun', 'Crime - Types & Offenders', '6.5'],
+  ['Internet fraud', 'Lừa đảo qua mạng', 'noun phrase', 'Crime - Types & Offenders', '6.5'],
+  ['Minor offense', 'Tội nhẹ', 'noun phrase', 'Crime - Types & Offenders', '6.0'],
+  ['Petty crime', 'Tội phạm nhỏ / tội nhẹ', 'noun phrase', 'Crime - Types & Offenders', '6.0'],
   ['Shoplifting', 'Hành vi trộm cắp trong cửa hàng', 'noun', 'Crime - Types & Offenders', '6.0'],
   ['Petty theft', 'Trộm cắp nhỏ', 'noun phrase', 'Crime - Types & Offenders', '6.0'],
   ['Minor vandalism', 'Phá hoại tài sản ở mức độ nhẹ', 'noun phrase', 'Crime - Types & Offenders', '6.0'],
@@ -79,7 +86,7 @@ const crimeEntries: CrimeEntry[] = [
 
 export const CRIME_PDF_COLLOCATIONS: CollocationItem[] = crimeEntries.map(
   ([phrase, meaning, structure, topic, band], index) => ({
-    id: `default-crime-pdf-${String(index + 1).padStart(3, '0')}`,
+    id: `default-crime-pdf-v${CRIME_PDF_VERSION}-${String(index + 1).padStart(3, '0')}`,
     phrase,
     meaning,
     definition: meaning,

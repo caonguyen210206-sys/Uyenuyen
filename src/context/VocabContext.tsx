@@ -15,6 +15,7 @@ import {
 import { auth } from '../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { DEFAULT_COLLOCATIONS } from '../data/defaultCollocations';
+import { CRIME_PDF_COLLOCATIONS } from '../data/crimePdfCollocations';
 import { normalizeWord } from '../lib/vocabUtils';
 
 const PRACTICE_SELECTION_STORAGE_KEY = 'uyenuyen-practice-selection';
@@ -41,24 +42,31 @@ const defaultSettings: UserSettings = {
   defaultQuestions: 10,
   defaultCriteria: ['Meaning', 'Word Type', 'Synonyms'],
   defaultCollocationsSeeded: false,
+  crimeCollocationsSeeded: false,
 };
 
 const VocabContext = createContext<VocabContextType | undefined>(undefined);
 
-function mergeDefaultCollocations(fetchedCollocations: CollocationItem[]) {
-  const existingKeys = new Set(fetchedCollocations.map(item => normalizeWord(item.phrase)));
-  const defaultItemsToAdd = DEFAULT_COLLOCATIONS
-    .filter(item => !existingKeys.has(normalizeWord(item.phrase)))
-    .map(item => ({
+function mergeCollocationPack(
+  currentItems: CollocationItem[],
+  defaultPack: CollocationItem[],
+) {
+  const existingKeys = new Set(currentItems.map(item => normalizeWord(item.phrase)));
+  const itemsToAdd: CollocationItem[] = [];
+
+  defaultPack.forEach(item => {
+    const key = normalizeWord(item.phrase);
+    if (!key || existingKeys.has(key)) return;
+    existingKeys.add(key);
+    itemsToAdd.push({
       ...item,
       ownerId: auth.currentUser?.uid,
-    }));
+    });
+  });
 
   return {
-    mergedCollocations: defaultItemsToAdd.length > 0
-      ? [...fetchedCollocations, ...defaultItemsToAdd]
-      : fetchedCollocations,
-    addedDefaultCount: defaultItemsToAdd.length,
+    mergedItems: itemsToAdd.length > 0 ? [...currentItems, ...itemsToAdd] : currentItems,
+    addedCount: itemsToAdd.length,
   };
 }
 
@@ -97,37 +105,53 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
         getVocabItems(),
         getCollocationItems(),
         getQuizSessions(),
-        getSettings()
+        getSettings(),
       ]);
 
-      const shouldSeedDefaults = !fetchedSettings.defaultCollocationsSeeded;
-      const { mergedCollocations, addedDefaultCount } = shouldSeedDefaults
-        ? mergeDefaultCollocations(fetchedCollocations)
-        : { mergedCollocations: fetchedCollocations, addedDefaultCount: 0 };
-      const nextSettings = shouldSeedDefaults
-        ? { ...fetchedSettings, defaultCollocationsSeeded: true }
-        : fetchedSettings;
+      let mergedCollocations = fetchedCollocations;
+      let totalAdded = 0;
+      let nextSettings: UserSettings = {
+        ...defaultSettings,
+        ...fetchedSettings,
+      };
+      let settingsChanged = false;
+
+      if (!nextSettings.defaultCollocationsSeeded) {
+        const result = mergeCollocationPack(mergedCollocations, DEFAULT_COLLOCATIONS);
+        mergedCollocations = result.mergedItems;
+        totalAdded += result.addedCount;
+        nextSettings = { ...nextSettings, defaultCollocationsSeeded: true };
+        settingsChanged = true;
+      }
+
+      if (!nextSettings.crimeCollocationsSeeded) {
+        const result = mergeCollocationPack(mergedCollocations, CRIME_PDF_COLLOCATIONS);
+        mergedCollocations = result.mergedItems;
+        totalAdded += result.addedCount;
+        nextSettings = { ...nextSettings, crimeCollocationsSeeded: true };
+        settingsChanged = true;
+      }
 
       setItems(fetchedItems);
       setCollocations(mergedCollocations);
       setSessions(fetchedSessions);
       setSettings(nextSettings);
 
-      if (shouldSeedDefaults) {
-        if (addedDefaultCount > 0) {
-          await saveCollocationItems(mergedCollocations);
-        }
+      if (totalAdded > 0) {
+        await saveCollocationItems(mergedCollocations);
+      }
+      if (settingsChanged) {
         await saveSettings(nextSettings);
       }
     } catch (error) {
-      console.error("Error fetching data:", error);
+      console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, user => {
       if (user) {
         fetchAllData();
       } else {
@@ -202,7 +226,7 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
       removeCollocationItems,
       addQuizSession,
       updateSettings: updateSettingsLocal,
-      refreshData: fetchAllData
+      refreshData: fetchAllData,
     }}>
       {children}
     </VocabContext.Provider>

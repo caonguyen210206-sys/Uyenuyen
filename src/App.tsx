@@ -10,6 +10,7 @@ import Dashboard from './components/Dashboard';
 import Library from './components/Library';
 import VocabList from './components/VocabList';
 import Collocations from './components/Collocations';
+import CrimeCollocations from './components/CrimeCollocations';
 import Practice from './components/Practice';
 import MonthlyReview from './components/MonthlyReview';
 import Settings from './components/Settings';
@@ -48,7 +49,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, currentUser => {
       setUser(currentUser);
       setLoadingAuth(false);
     });
@@ -146,7 +147,7 @@ export default function App() {
               <p className="text-xs text-gray-400 font-semibold break-all">{APP_URL}</p>
             </div>
           ) : (
-            <button 
+            <button
               onClick={handleLogin}
               className="flex items-center justify-center gap-3 w-full px-6 py-4 bg-pink-500 hover:bg-pink-600 text-white font-bold rounded-2xl shadow-sm transition-colors active:scale-95"
             >
@@ -199,6 +200,9 @@ export default function App() {
             </div>
             <div className={currentView === 'collocations' ? 'block' : 'hidden'}>
               <Collocations setCurrentView={setCurrentView} />
+            </div>
+            <div className={currentView === 'crime-collocations' ? 'block' : 'hidden'}>
+              <CrimeCollocations setCurrentView={setCurrentView} />
             </div>
             <div className={currentView === 'practice' ? 'block' : 'hidden'}>
               <Practice currentView={currentView} />

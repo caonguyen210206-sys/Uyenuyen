@@ -1,0 +1,96 @@
+import { CollocationItem } from '../types';
+
+export const CRIME_PDF_SOURCE = 'Default PDF - Crime';
+const CRIME_CREATED_AT = 1710000000000;
+
+type CrimeEntry = readonly [
+  phrase: string,
+  meaning: string,
+  structure: string,
+  topic: string,
+  band: string,
+];
+
+const crimeEntries: CrimeEntry[] = [
+  ['Imprisonment', 'Đi tù / sự giam giữ', 'noun', 'Crime - Types & Offenders', '6.0'],
+  ['Offender / Lawbreaker / Criminal', 'Người phạm tội / kẻ vi phạm pháp luật', 'noun variants', 'Crime - Types & Offenders', '6.0'],
+  ['Juvenile offender / Young offender', 'Tội phạm vị thành niên', 'noun phrase', 'Crime - Types & Offenders', '6.5'],
+  ['First-time offender', 'Người phạm tội lần đầu', 'noun phrase', 'Crime - Types & Offenders', '6.5'],
+  ['Reoffender / Repeat offender', 'Người tái phạm tội', 'noun variants', 'Crime - Types & Offenders', '6.5'],
+  ['Cybercrime / Internet fraud', 'Tội phạm công nghệ cao / lừa đảo qua mạng', 'noun variants', 'Crime - Types & Offenders', '6.5'],
+  ['Minor offense / Petty crime', 'Tội nhẹ', 'noun variants', 'Crime - Types & Offenders', '6.0'],
+  ['Shoplifting', 'Hành vi trộm cắp trong cửa hàng', 'noun', 'Crime - Types & Offenders', '6.0'],
+  ['Petty theft', 'Trộm cắp nhỏ', 'noun phrase', 'Crime - Types & Offenders', '6.0'],
+  ['Minor vandalism', 'Phá hoại tài sản ở mức độ nhẹ', 'noun phrase', 'Crime - Types & Offenders', '6.0'],
+  ['Serious crime', 'Tội nghiêm trọng', 'adjective + noun', 'Crime - Types & Offenders', '6.0'],
+  ['Violent crime', 'Tội phạm bạo lực', 'adjective + noun', 'Crime - Types & Offenders', '6.0'],
+
+  ['Poverty and unemployment', 'Nghèo đói và thất nghiệp', 'noun phrase', 'Crime - Causes', '6.0'],
+  ['Impoverished communities', 'Các cộng đồng nghèo khó', 'adjective + noun', 'Crime - Causes', '6.5'],
+  ['Lack of parental supervision', 'Sự thiếu giám sát từ cha mẹ', 'noun phrase', 'Crime - Causes', '6.5'],
+  ['Peer pressure', 'Áp lực từ bạn bè cùng lứa', 'noun phrase', 'Crime - Causes', '6.0'],
+  ['Socio-economic inequality', 'Sự bất bình đẳng kinh tế - xã hội', 'noun phrase', 'Crime - Causes', '7.0'],
+  ['Exposure to violence on media', 'Việc tiếp xúc với hành vi bạo lực trên truyền thông', 'noun phrase', 'Crime - Causes', '6.5'],
+  ['Socio-economic marginalization', 'Sự gạt ra lề xã hội về mặt kinh tế - xã hội', 'noun phrase', 'Crime - Causes', '7.5'],
+  ['Social stigma', 'Định kiến xã hội', 'noun phrase', 'Crime - Causes', '6.5'],
+  ['Systemic poverty and deprivation', 'Tình trạng nghèo đói và thiếu thốn mang tính hệ thống', 'noun phrase', 'Crime - Causes', '7.0'],
+  ['Lack of social mobility', 'Sự thiếu khả năng thăng tiến trong xã hội', 'noun phrase', 'Crime - Causes', '7.0'],
+  ['Peer-group pressure and gang subculture', 'Áp lực từ nhóm bạn và văn hóa băng nhóm', 'noun phrase', 'Crime - Causes', '7.0'],
+  ['Psychological predisposition to violence', 'Khuynh hướng tâm lý thiên về bạo lực', 'noun phrase', 'Crime - Causes', '7.5'],
+  ['Inadequate parental supervision', 'Sự giám sát không đầy đủ từ cha mẹ', 'adjective + noun phrase', 'Crime - Causes', '6.5'],
+  ['Dysfunctional family dynamics', 'Môi trường và mối quan hệ gia đình không lành mạnh', 'adjective + noun phrase', 'Crime - Causes', '7.0'],
+  ['Poor moral character', 'Nhân cách đạo đức kém', 'adjective + noun phrase', 'Crime - Causes', '6.5'],
+  ['Individual character traits', 'Đặc điểm tính cách cá nhân', 'noun phrase', 'Crime - Causes', '6.5'],
+  ['Personal responsibility', 'Trách nhiệm cá nhân', 'noun phrase', 'Crime - Causes', '6.0'],
+
+  ['Commit a crime', 'Thực hiện hành vi phạm tội', 'verb + noun', 'Crime - Punishment & Deterrence', '6.0'],
+  ['Engage in illegal activities', 'Tham gia các hoạt động bất hợp pháp', 'verb phrase', 'Crime - Punishment & Deterrence', '6.5'],
+  ['Impose a strict punishment on somebody', 'Áp dụng hình phạt nghiêm khắc lên ai đó', 'verb phrase', 'Crime - Punishment & Deterrence', '7.0'],
+  ['Custodial sentence', 'Án phạt tù giam', 'noun phrase', 'Crime - Punishment & Deterrence', '7.0'],
+  ['Prison sentence', 'Án phạt tù', 'noun phrase', 'Crime - Punishment & Deterrence', '6.0'],
+  ['Serve a prison sentence', 'Chấp hành án tù', 'verb phrase', 'Crime - Punishment & Deterrence', '6.5'],
+  ['Act as a deterrent to potential criminals', 'Đóng vai trò răn đe những người có ý định phạm tội', 'verb phrase', 'Crime - Punishment & Deterrence', '7.5'],
+  ['Capital punishment', 'Án tử hình', 'noun phrase', 'Crime - Punishment & Deterrence', '7.0'],
+  ['Death penalty', 'Án tử hình', 'noun phrase', 'Crime - Punishment & Deterrence', '6.0'],
+  ['Community service', 'Lao động công ích', 'noun phrase', 'Crime - Punishment & Deterrence', '6.0'],
+
+  ['Rehabilitate offenders', 'Cải tạo người phạm tội', 'verb + noun', 'Crime - Rehabilitation', '6.5'],
+  ['Reintegrate into society', 'Tái hòa nhập cộng đồng', 'verb phrase', 'Crime - Rehabilitation', '6.5'],
+  ['Provide vocational training', 'Cung cấp đào tạo nghề', 'verb phrase', 'Crime - Rehabilitation', '6.5'],
+  ['Provide job opportunities', 'Cung cấp cơ hội việc làm', 'verb phrase', 'Crime - Rehabilitation', '6.0'],
+  ['Re-offend', 'Tái phạm tội', 'verb', 'Crime - Rehabilitation', '6.5'],
+  ['Turn to a life of crime again', 'Quay lại con đường phạm tội', 'verb phrase', 'Crime - Rehabilitation', '7.0'],
+  ['Break the cycle of crime', 'Phá vỡ vòng lặp phạm tội', 'verb phrase', 'Crime - Rehabilitation', '7.0'],
+  ['Rehabilitative programs', 'Các chương trình cải tạo', 'noun phrase', 'Crime - Rehabilitation', '7.0'],
+  ['Correctional programs', 'Các chương trình giáo dục và cải huấn phạm nhân', 'noun phrase', 'Crime - Rehabilitation', '7.0'],
+  ['Reintegrate smoothly into mainstream society', 'Tái hòa nhập thuận lợi vào xã hội', 'verb phrase', 'Crime - Rehabilitation', '7.5'],
+  ['Vocational training and skill acquisition', 'Đào tạo nghề và trang bị kỹ năng', 'noun phrase', 'Crime - Rehabilitation', '7.0'],
+  ['Community-based rehabilitation', 'Cải tạo dựa vào cộng đồng', 'noun phrase', 'Crime - Rehabilitation', '7.0'],
+  ['Address the underlying psychological triggers', 'Giải quyết những yếu tố kích thích tâm lý sâu xa', 'verb phrase', 'Crime - Rehabilitation', '7.5'],
+  ['Reduce the rate of reoffending', 'Giảm tỷ lệ tái phạm tội', 'verb phrase', 'Crime - Rehabilitation', '7.0'],
+  ['Curb recidivism', 'Kiềm chế tình trạng tái phạm', 'verb + noun', 'Crime - Rehabilitation', '7.5'],
+
+  ['Sensationalize crime coverage', 'Giật gân hóa tin tức về tội phạm', 'verb + noun', 'Crime - Media & Technology', '7.0'],
+  ['Instill a pervasive fear of crime', 'Gieo rắc nỗi sợ tội phạm bao trùm', 'verb phrase', 'Crime - Media & Technology', '7.5'],
+  ['Desensitize viewers to violence', 'Làm người xem chai sạn cảm xúc trước bạo lực', 'verb phrase', 'Crime - Media & Technology', '7.5'],
+  ['Copycat crimes', 'Các vụ án bắt chước theo truyền thông', 'noun phrase', 'Crime - Media & Technology', '7.0'],
+  ['Mass surveillance systems (CCTV)', 'Hệ thống giám sát diện rộng bằng camera an ninh', 'noun phrase', 'Crime - Media & Technology', '7.0'],
+];
+
+export const CRIME_PDF_COLLOCATIONS: CollocationItem[] = crimeEntries.map(
+  ([phrase, meaning, structure, topic, band], index) => ({
+    id: `default-crime-pdf-${String(index + 1).padStart(3, '0')}`,
+    phrase,
+    meaning,
+    definition: meaning,
+    structure,
+    example: '',
+    topic,
+    band,
+    status: 'Storage',
+    source: CRIME_PDF_SOURCE,
+    createdAt: CRIME_CREATED_AT + index,
+    updatedAt: CRIME_CREATED_AT + index,
+    timesChecked: 0,
+  }),
+);

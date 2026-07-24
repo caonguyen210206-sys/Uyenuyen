@@ -15,7 +15,7 @@ import {
 import { auth } from '../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { DEFAULT_COLLOCATIONS } from '../data/defaultCollocations';
-import { CRIME_PDF_COLLOCATIONS } from '../data/crimePdfCollocations';
+import { CRIME_PDF_COLLOCATIONS, CRIME_PDF_VERSION } from '../data/crimePdfCollocations';
 import { normalizeWord } from '../lib/vocabUtils';
 
 const PRACTICE_SELECTION_STORAGE_KEY = 'uyenuyen-practice-selection';
@@ -43,6 +43,7 @@ const defaultSettings: UserSettings = {
   defaultCriteria: ['Meaning', 'Word Type', 'Synonyms'],
   defaultCollocationsSeeded: false,
   crimeCollocationsSeeded: false,
+  crimeCollocationsSeedVersion: 0,
 };
 
 const VocabContext = createContext<VocabContextType | undefined>(undefined);
@@ -124,11 +125,16 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
         settingsChanged = true;
       }
 
-      if (!nextSettings.crimeCollocationsSeeded) {
+      const currentCrimeVersion = Number(nextSettings.crimeCollocationsSeedVersion || 0);
+      if (currentCrimeVersion < CRIME_PDF_VERSION) {
         const result = mergeCollocationPack(mergedCollocations, CRIME_PDF_COLLOCATIONS);
         mergedCollocations = result.mergedItems;
         totalAdded += result.addedCount;
-        nextSettings = { ...nextSettings, crimeCollocationsSeeded: true };
+        nextSettings = {
+          ...nextSettings,
+          crimeCollocationsSeeded: true,
+          crimeCollocationsSeedVersion: CRIME_PDF_VERSION,
+        };
         settingsChanged = true;
       }
 

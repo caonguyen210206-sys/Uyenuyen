@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { BookOpenCheck, CheckCircle2, ExternalLink, ListPlus, Search, ShieldAlert, Tags } from 'lucide-react';
+import { BookOpenCheck, CheckCircle2, CheckSquare2, ExternalLink, ListPlus, Search, ShieldAlert, Tags } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { CollocationItem, ViewState, VocabItem } from '../types';
 import { useVocab } from '../context/VocabContext';
@@ -64,6 +64,8 @@ export default function CrimeCollocations({ setCurrentView }: CrimeCollocationsP
   });
 
   const selectedEntries = CRIME_PDF_COLLOCATIONS.filter(item => selectedIds.has(item.id));
+  const allCrimePackSelected = CRIME_PDF_COLLOCATIONS.length > 0
+    && CRIME_PDF_COLLOCATIONS.every(item => selectedIds.has(item.id));
 
   const toggleSelected = (id: string) => {
     setSelectedIds(previous => {
@@ -82,6 +84,14 @@ export default function CrimeCollocations({ setCurrentView }: CrimeCollocationsP
       visibleIds.forEach(id => allVisibleSelected ? next.delete(id) : next.add(id));
       return next;
     });
+  };
+
+  const toggleAllCrimePack = () => {
+    if (allCrimePackSelected) {
+      setSelectedIds(new Set());
+      return;
+    }
+    setSelectedIds(new Set(CRIME_PDF_COLLOCATIONS.map(item => item.id)));
   };
 
   const ensureSelectedInCollocationBank = async () => {
@@ -243,6 +253,17 @@ export default function CrimeCollocations({ setCurrentView }: CrimeCollocationsP
             {topics.map(topic => <option key={topic}>{topic}</option>)}
           </select>
           <button onClick={toggleAllVisible} className="px-4 py-3 rounded-xl bg-gray-50 border-thin font-bold text-gray-600 hover:bg-gray-100">Select visible</button>
+          <button
+            onClick={toggleAllCrimePack}
+            className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border font-extrabold transition-colors ${allCrimePackSelected ? 'bg-red-50 border-red-100 text-red-600 hover:bg-red-100' : 'bg-[#E8F5E9] border-[#A5D6A7] text-[#2D5A27] hover:bg-[#D0E8D0]'}`}
+          >
+            <CheckSquare2 size={18} />
+            {allCrimePackSelected ? 'Clear all Crime Pack' : `Select all Crime Pack (${CRIME_PDF_COLLOCATIONS.length})`}
+          </button>
+        </div>
+
+        <div className="rounded-xl bg-purple-50 border border-purple-100 px-4 py-3 text-sm font-bold text-purple-700">
+          Đã chọn {selectedEntries.length}/{CRIME_PDF_COLLOCATIONS.length} item trong Crime Pack.
         </div>
 
         <div className="flex flex-wrap gap-3">

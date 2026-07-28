@@ -1,7 +1,7 @@
 import { CollocationItem } from '../types';
 
 export const CRIME_PDF_SOURCE = 'Default PDF - Crime';
-export const CRIME_PDF_VERSION = 2;
+export const CRIME_PDF_VERSION = 3;
 const CRIME_CREATED_AT = 1710000000000;
 
 type CrimeEntry = readonly [
@@ -22,7 +22,7 @@ const crimeEntries: CrimeEntry[] = [
   ['First-time offender', 'Người phạm tội lần đầu', 'noun phrase', 'Crime - Types & Offenders', '6.5'],
   ['Reoffender', 'Người tái phạm tội', 'noun', 'Crime - Types & Offenders', '6.5'],
   ['Repeat offender', 'Người tái phạm tội', 'noun phrase', 'Crime - Types & Offenders', '6.5'],
-  ['Cybercrime', 'Tội phạm công nghệ cao', 'noun', 'Crime - Types & Offenders', '6.5'],
+  ['Cybercrime', 'Tội phạm công nghệ cao / tội phạm mạng', 'noun', 'Crime - Types & Offenders', '6.5'],
   ['Internet fraud', 'Lừa đảo qua mạng', 'noun phrase', 'Crime - Types & Offenders', '6.5'],
   ['Minor offense', 'Tội nhẹ', 'noun phrase', 'Crime - Types & Offenders', '6.0'],
   ['Petty crime', 'Tội phạm nhỏ / tội nhẹ', 'noun phrase', 'Crime - Types & Offenders', '6.0'],
@@ -82,6 +82,51 @@ const crimeEntries: CrimeEntry[] = [
   ['Desensitize viewers to violence', 'Làm người xem chai sạn cảm xúc trước bạo lực', 'verb phrase', 'Crime - Media & Technology', '7.5'],
   ['Copycat crimes', 'Các vụ án bắt chước theo truyền thông', 'noun phrase', 'Crime - Media & Technology', '7.0'],
   ['Mass surveillance systems (CCTV)', 'Hệ thống giám sát diện rộng bằng camera an ninh', 'noun phrase', 'Crime - Media & Technology', '7.0'],
+
+  ['Conceivable', 'Có thể tưởng tượng được / có thể xảy ra', 'adjective', 'Crime - Digital Convenience & Benefits', '6.5'],
+  ['Efficiency', 'Hiệu quả / hiệu suất', 'noun', 'Crime - Digital Convenience & Benefits', '6.0'],
+  ['Trade a degree of privacy for convenience', 'Đánh đổi một phần quyền riêng tư để lấy sự tiện lợi', 'verb phrase', 'Crime - Digital Convenience & Benefits', '7.5'],
+  ['Conceivable benefit', 'Lợi ích có thể có', 'adjective + noun', 'Crime - Digital Convenience & Benefits', '6.5'],
+  ['Detrimental effect', 'Tác động tiêu cực', 'adjective + noun', 'Crime - Digital Convenience & Benefits', '7.0'],
+  ['Streamlined transaction', 'Giao dịch được tinh giản / tối ưu hóa', 'adjective + noun', 'Crime - Digital Convenience & Benefits', '7.0'],
+  ['Time-efficient', 'Tiết kiệm thời gian', 'adjective', 'Crime - Digital Convenience & Benefits', '6.5'],
+  ['Digital convenience', 'Sự tiện lợi của công nghệ số', 'noun phrase', 'Crime - Digital Convenience & Benefits', '6.5'],
+  ['Effortlessly', 'Một cách dễ dàng / không tốn nhiều công sức', 'adverb', 'Crime - Digital Convenience & Benefits', '6.5'],
+  ['Simultaneously', 'Đồng thời', 'adverb', 'Crime - Digital Convenience & Benefits', '6.5'],
+  ['State-of-the-art digitalization', 'Sự số hóa và hiện đại hóa tiên tiến', 'noun phrase', 'Crime - Digital Convenience & Benefits', '7.5'],
+  ['Eliminate the need for physical travel', 'Loại bỏ nhu cầu phải di chuyển trực tiếp', 'verb phrase', 'Crime - Digital Convenience & Benefits', '7.0'],
+  ['Temporal and geographical barriers', 'Rào cản về thời gian và địa lý', 'noun phrase', 'Crime - Digital Convenience & Benefits', '7.0'],
+  ['Social connectivity', 'Sự kết nối xã hội', 'noun phrase', 'Crime - Digital Convenience & Benefits', '6.5'],
+
+  ['Data breaches', 'Các vụ rò rỉ dữ liệu', 'noun phrase', 'Crime - Cybersecurity & Data Privacy', '7.0'],
+  ['Leaked information', 'Thông tin bị rò rỉ', 'adjective + noun', 'Crime - Cybersecurity & Data Privacy', '6.5'],
+  ['Identity theft', 'Đánh cắp danh tính', 'noun phrase', 'Crime - Cybersecurity & Data Privacy', '6.5'],
+  ['Financial fraud', 'Gian lận tài chính', 'noun phrase', 'Crime - Cybersecurity & Data Privacy', '6.5'],
+  ['Cyberattacks', 'Các cuộc tấn công mạng', 'noun', 'Crime - Cybersecurity & Data Privacy', '6.5'],
+  ['Loss of privacy', 'Mất quyền riêng tư', 'noun phrase', 'Crime - Cybersecurity & Data Privacy', '6.5'],
+  ['Data exploitation', 'Khai thác dữ liệu trái phép', 'noun phrase', 'Crime - Cybersecurity & Data Privacy', '7.0'],
+  ['Surveillance', 'Sự giám sát', 'noun', 'Crime - Cybersecurity & Data Privacy', '6.5'],
+  ['Privacy erosion', 'Sự xói mòn quyền riêng tư', 'noun phrase', 'Crime - Cybersecurity & Data Privacy', '7.0'],
+  ['Digital footprint', 'Dấu vết số', 'noun phrase', 'Crime - Cybersecurity & Data Privacy', '6.5'],
+  ['Unequal protection', 'Sự bảo vệ không đồng đều', 'adjective + noun', 'Crime - Cybersecurity & Data Privacy', '6.5'],
+  ['Personal data exposure', 'Sự lộ dữ liệu cá nhân', 'noun phrase', 'Crime - Cybersecurity & Data Privacy', '7.0'],
+  ['Cybersecurity threats', 'Các nguy cơ an ninh mạng', 'noun phrase', 'Crime - Cybersecurity & Data Privacy', '7.0'],
+  ['Erosion of privacy', 'Sự xói mòn quyền riêng tư', 'noun phrase', 'Crime - Cybersecurity & Data Privacy', '7.0'],
+  ['Compromised', 'Bị xâm phạm / bị tổn hại', 'adjective / past participle', 'Crime - Cybersecurity & Data Privacy', '7.0'],
+  ['Associated threats', 'Những mối đe dọa liên quan', 'adjective + noun', 'Crime - Cybersecurity & Data Privacy', '6.5'],
+
+  ['Long-term consequences', 'Hậu quả lâu dài', 'adjective + noun', 'Crime - Long-term Privacy Consequences', '6.5'],
+  ['Intensive', 'Chuyên sâu / có cường độ cao', 'adjective', 'Crime - Long-term Privacy Consequences', '6.5'],
+  ['Long-term financial losses', 'Tổn thất tài chính lâu dài', 'noun phrase', 'Crime - Long-term Privacy Consequences', '7.0'],
+  ['Psychological distress', 'Tổn thương / căng thẳng tâm lý', 'noun phrase', 'Crime - Long-term Privacy Consequences', '7.0'],
+  ['Become increasingly vulnerable to', 'Ngày càng dễ bị tổn thương trước', 'verb phrase', 'Crime - Long-term Privacy Consequences', '7.0'],
+  ['Become increasingly susceptible to', 'Ngày càng dễ bị ảnh hưởng / dễ mắc phải', 'verb phrase', 'Crime - Long-term Privacy Consequences', '7.0'],
+  ['Erode', 'Xói mòn / làm suy yếu dần', 'verb', 'Crime - Long-term Privacy Consequences', '6.5'],
+  ['Irreversible', 'Không thể đảo ngược', 'adjective', 'Crime - Long-term Privacy Consequences', '7.0'],
+  ['Indefinitely', 'Vô thời hạn', 'adverb', 'Crime - Long-term Privacy Consequences', '7.0'],
+  ['Prospect', 'Triển vọng / cơ hội', 'noun', 'Crime - Long-term Privacy Consequences', '6.5'],
+  ['Widespread sharing', 'Sự chia sẻ rộng rãi', 'noun phrase', 'Crime - Long-term Privacy Consequences', '6.5'],
+  ['Leaving individuals insufficiently safeguarded', 'Khiến các cá nhân không được bảo vệ đầy đủ', 'participle phrase', 'Crime - Long-term Privacy Consequences', '7.5'],
 ];
 
 export const CRIME_PDF_COLLOCATIONS: CollocationItem[] = crimeEntries.map(

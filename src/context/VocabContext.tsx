@@ -134,7 +134,7 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
       setItems(fetchedItems);
       setCollocations(mergedCollocations);
       setReadingProjects(fetchedProjects);
-      setReadingSources(fetchedSources);
+      setReadingSources([...fetchedSources].sort((a, b) => a.createdAt - b.createdAt));
       setSessions(fetchedSessions);
       setSettings(nextSettings);
 
@@ -205,11 +205,12 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const updateReadingSources = async (sources: ReadingSource[]) => {
-    const nextIds = new Set(sources.map(source => source.id));
+    const orderedSources = [...sources].sort((a, b) => a.createdAt - b.createdAt);
+    const nextIds = new Set(orderedSources.map(source => source.id));
     const removedIds = readingSources.filter(source => !nextIds.has(source.id)).map(source => source.id);
-    setReadingSources(sources);
+    setReadingSources(orderedSources);
     await Promise.all([
-      saveReadingSources(sources),
+      saveReadingSources(orderedSources),
       removedIds.length > 0 ? deleteReadingSources(removedIds) : Promise.resolve(),
     ]);
   };

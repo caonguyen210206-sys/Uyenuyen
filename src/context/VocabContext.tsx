@@ -62,28 +62,19 @@ const VocabContext = createContext<VocabContextType | undefined>(undefined);
 function mergeCollocationPack(currentItems: CollocationItem[], defaultPack: CollocationItem[]) {
   const existingKeys = new Set(currentItems.map(item => normalizeWord(item.phrase)));
   const itemsToAdd: CollocationItem[] = [];
-
   defaultPack.forEach(item => {
     const key = normalizeWord(item.phrase);
     if (!key || existingKeys.has(key)) return;
     existingKeys.add(key);
     itemsToAdd.push({ ...item, ownerId: auth.currentUser?.uid });
   });
-
-  return {
-    mergedItems: itemsToAdd.length > 0 ? [...currentItems, ...itemsToAdd] : currentItems,
-    addedCount: itemsToAdd.length,
-  };
+  return { mergedItems: itemsToAdd.length > 0 ? [...currentItems, ...itemsToAdd] : currentItems, addedCount: itemsToAdd.length };
 }
 
 function rememberNewCollocationsForPractice(previousItems: VocabItem[], nextItems: VocabItem[]) {
   const previousIds = new Set(previousItems.map(item => item.id));
-  const newCollocationIds = nextItems
-    .filter(item => !previousIds.has(item.id) && item.source === 'Collocation')
-    .map(item => item.id);
-
+  const newCollocationIds = nextItems.filter(item => !previousIds.has(item.id) && item.source === 'Collocation').map(item => item.id);
   if (newCollocationIds.length === 0) return;
-
   try {
     sessionStorage.setItem(PRACTICE_SELECTION_STORAGE_KEY, JSON.stringify({
       ids: newCollocationIds,
@@ -92,7 +83,7 @@ function rememberNewCollocationsForPractice(previousItems: VocabItem[], nextItem
       createdAt: Date.now(),
     }));
   } catch {
-    // Practice handoff is optional. Ignore browser storage errors.
+    // Practice handoff is optional.
   }
 }
 
@@ -136,11 +127,7 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
         const result = mergeCollocationPack(mergedCollocations, CRIME_PDF_COLLOCATIONS);
         mergedCollocations = result.mergedItems;
         totalAdded += result.addedCount;
-        nextSettings = {
-          ...nextSettings,
-          crimeCollocationsSeeded: true,
-          crimeCollocationsSeedVersion: CRIME_PDF_VERSION,
-        };
+        nextSettings = { ...nextSettings, crimeCollocationsSeeded: true, crimeCollocationsSeedVersion: CRIME_PDF_VERSION };
         settingsChanged = true;
       }
 
@@ -162,9 +149,8 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, user => {
-      if (user) {
-        fetchAllData();
-      } else {
+      if (user) fetchAllData();
+      else {
         setItems([]);
         setCollocations([]);
         setReadingProjects([]);
@@ -219,8 +205,13 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const updateReadingSources = async (sources: ReadingSource[]) => {
+    const nextIds = new Set(sources.map(source => source.id));
+    const removedIds = readingSources.filter(source => !nextIds.has(source.id)).map(source => source.id);
     setReadingSources(sources);
-    await saveReadingSources(sources);
+    await Promise.all([
+      saveReadingSources(sources),
+      removedIds.length > 0 ? deleteReadingSources(removedIds) : Promise.resolve(),
+    ]);
   };
 
   const removeReadingProject = async (projectId: string) => {
@@ -240,7 +231,6 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
     setReadingProjects(nextProjects);
     setReadingSources(nextSources);
     setItems(nextItems);
-
     await Promise.all([
       deleteReadingProjects([projectId]),
       sourceIds.length ? deleteReadingSources(sourceIds) : Promise.resolve(),
@@ -249,7 +239,7 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addQuizSession = async (session: QuizSession) => {
-    setSessions(prev => [session, ...prev]);
+    setSessions(previous => [session, ...previous]);
     await saveQuizSession(session);
   };
 

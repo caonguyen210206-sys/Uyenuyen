@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { VocabItem, QuizSession, UserSettings, CollocationItem } from '../types';
+import { VocabItem, QuizSession, UserSettings, CollocationItem, ReadingProject, ReadingSource } from '../types';
 import {
   getVocabItems,
   saveVocabItems,
@@ -11,6 +11,12 @@ import {
   getCollocationItems,
   saveCollocationItems,
   deleteCollocationItems,
+  getReadingProjects,
+  saveReadingProjects,
+  deleteReadingProjects,
+  getReadingSources,
+  saveReadingSources,
+  deleteReadingSources,
 } from '../lib/storage';
 import { auth } from '../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -23,6 +29,8 @@ const PRACTICE_SELECTION_STORAGE_KEY = 'uyenuyen-practice-selection';
 interface VocabContextType {
   items: VocabItem[];
   collocations: CollocationItem[];
+  readingProjects: ReadingProject[];
+  readingSources: ReadingSource[];
   sessions: QuizSession[];
   settings: UserSettings;
   loading: boolean;
@@ -32,6 +40,9 @@ interface VocabContextType {
   addCollocationItem: (item: CollocationItem) => Promise<void>;
   updateCollocationItems: (items: CollocationItem[]) => Promise<void>;
   removeCollocationItems: (ids: string[]) => Promise<void>;
+  updateReadingProjects: (projects: ReadingProject[]) => Promise<void>;
+  updateReadingSources: (sources: ReadingSource[]) => Promise<void>;
+  removeReadingProject: (projectId: string) => Promise<void>;
   addQuizSession: (session: QuizSession) => Promise<void>;
   updateSettings: (settings: UserSettings) => Promise<void>;
   refreshData: () => Promise<void>;
@@ -48,10 +59,7 @@ const defaultSettings: UserSettings = {
 
 const VocabContext = createContext<VocabContextType | undefined>(undefined);
 
-function mergeCollocationPack(
-  currentItems: CollocationItem[],
-  defaultPack: CollocationItem[],
-) {
+function mergeCollocationPack(currentItems: CollocationItem[], defaultPack: CollocationItem[]) {
   const existingKeys = new Set(currentItems.map(item => normalizeWord(item.phrase)));
   const itemsToAdd: CollocationItem[] = [];
 
@@ -59,10 +67,7 @@ function mergeCollocationPack(
     const key = normalizeWord(item.phrase);
     if (!key || existingKeys.has(key)) return;
     existingKeys.add(key);
-    itemsToAdd.push({
-      ...item,
-      ownerId: auth.currentUser?.uid,
-    });
+    itemsToAdd.push({ ...item, ownerId: auth.currentUser?.uid });
   });
 
   return {
@@ -94,6 +99,8 @@ function rememberNewCollocationsForPractice(previousItems: VocabItem[], nextItem
 export const VocabProvider = ({ children }: { children: ReactNode }) => {
   const [items, setItems] = useState<VocabItem[]>([]);
   const [collocations, setCollocations] = useState<CollocationItem[]>([]);
+  const [readingProjects, setReadingProjects] = useState<ReadingProject[]>([]);
+  const [readingSources, setReadingSources] = useState<ReadingSource[]>([]);
   const [sessions, setSessions] = useState<QuizSession[]>([]);
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
   const [loading, setLoading] = useState(true);
@@ -102,19 +109,18 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
     if (!auth.currentUser) return;
     setLoading(true);
     try {
-      const [fetchedItems, fetchedCollocations, fetchedSessions, fetchedSettings] = await Promise.all([
+      const [fetchedItems, fetchedCollocations, fetchedProjects, fetchedSources, fetchedSessions, fetchedSettings] = await Promise.all([
         getVocabItems(),
         getCollocationItems(),
+        getReadingProjects(),
+        getReadingSources(),
         getQuizSessions(),
         getSettings(),
       ]);
 
       let mergedCollocations = fetchedCollocations;
       let totalAdded = 0;
-      let nextSettings: UserSettings = {
-        ...defaultSettings,
-        ...fetchedSettings,
-      };
+      let nextSettings: UserSettings = { ...defaultSettings, ...fetchedSettings };
       let settingsChanged = false;
 
       if (!nextSettings.defaultCollocationsSeeded) {
@@ -140,15 +146,13 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
 
       setItems(fetchedItems);
       setCollocations(mergedCollocations);
+      setReadingProjects(fetchedProjects);
+      setReadingSources(fetchedSources);
       setSessions(fetchedSessions);
       setSettings(nextSettings);
 
-      if (totalAdded > 0) {
-        await saveCollocationItems(mergedCollocations);
-      }
-      if (settingsChanged) {
-        await saveSettings(nextSettings);
-      }
+      if (totalAdded > 0) await saveCollocationItems(mergedCollocations);
+      if (settingsChanged) await saveSettings(nextSettings);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -163,6 +167,8 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
       } else {
         setItems([]);
         setCollocations([]);
+        setReadingProjects([]);
+        setReadingSources([]);
         setSessions([]);
         setSettings(defaultSettings);
         setLoading(false);
@@ -207,6 +213,41 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
     await deleteCollocationItems(ids);
   };
 
+  const updateReadingProjects = async (projects: ReadingProject[]) => {
+    setReadingProjects(projects);
+    await saveReadingProjects(projects);
+  };
+
+  const updateReadingSources = async (sources: ReadingSource[]) => {
+    setReadingSources(sources);
+    await saveReadingSources(sources);
+  };
+
+  const removeReadingProject = async (projectId: string) => {
+    const sourceIds = readingSources.filter(source => source.projectId === projectId).map(source => source.id);
+    const nextProjects = readingProjects.filter(project => project.id !== projectId);
+    const nextSources = readingSources.filter(source => source.projectId !== projectId);
+    const nextItems = items.map(item => {
+      if (!item.projectIds?.includes(projectId)) return item;
+      return {
+        ...item,
+        projectIds: item.projectIds.filter(id => id !== projectId),
+        projectSources: (item.projectSources || []).filter(source => source.projectId !== projectId),
+        updatedAt: Date.now(),
+      };
+    });
+
+    setReadingProjects(nextProjects);
+    setReadingSources(nextSources);
+    setItems(nextItems);
+
+    await Promise.all([
+      deleteReadingProjects([projectId]),
+      sourceIds.length ? deleteReadingSources(sourceIds) : Promise.resolve(),
+      saveVocabItems(nextItems),
+    ]);
+  };
+
   const addQuizSession = async (session: QuizSession) => {
     setSessions(prev => [session, ...prev]);
     await saveQuizSession(session);
@@ -221,6 +262,8 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
     <VocabContext.Provider value={{
       items,
       collocations,
+      readingProjects,
+      readingSources,
       sessions,
       settings,
       loading,
@@ -230,6 +273,9 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
       addCollocationItem,
       updateCollocationItems,
       removeCollocationItems,
+      updateReadingProjects,
+      updateReadingSources,
+      removeReadingProject,
       addQuizSession,
       updateSettings: updateSettingsLocal,
       refreshData: fetchAllData,
@@ -241,8 +287,6 @@ export const VocabProvider = ({ children }: { children: ReactNode }) => {
 
 export const useVocab = () => {
   const context = useContext(VocabContext);
-  if (context === undefined) {
-    throw new Error('useVocab must be used within a VocabProvider');
-  }
+  if (context === undefined) throw new Error('useVocab must be used within a VocabProvider');
   return context;
 };

@@ -1,4 +1,4 @@
-export type ViewState = 'dashboard' | 'library' | 'vocab-list' | 'collocations' | 'crime-collocations' | 'practice' | 'monthly-review' | 'settings';
+export type ViewState = 'dashboard' | 'library' | 'vocab-list' | 'collocations' | 'crime-collocations' | 'reading-projects' | 'practice' | 'monthly-review' | 'settings';
 
 export type VocabStatus = 'Storage' | 'Studying' | 'Completed';
 export type MasteryLevel = 'New' | 'Beginner' | 'Advanced' | 'Mastery';
@@ -11,6 +11,14 @@ export interface MiniQuiz {
   multipleChoiceAnswer: string;
   rewritePrompt: string;
   rewriteAnswer: string;
+}
+
+export interface VocabProjectSource {
+  projectId: string;
+  projectName: string;
+  sourceSentence?: string;
+  sourceParagraph?: string;
+  addedAt: number;
 }
 
 export interface VocabItem {
@@ -33,6 +41,8 @@ export interface VocabItem {
   lastScore?: number;
   timesChecked: number;
   miniQuiz?: MiniQuiz;
+  projectIds?: string[];
+  projectSources?: VocabProjectSource[];
   ownerId?: string;
 }
 
@@ -51,6 +61,50 @@ export interface CollocationItem {
   updatedAt?: number;
   timesChecked: number;
   ownerId?: string;
+}
+
+export type ReadingSourceType = 'image' | 'pdf' | 'text';
+
+export interface ReadingSource {
+  id: string;
+  projectId: string;
+  type: ReadingSourceType;
+  name: string;
+  mimeType: string;
+  dataUrl?: string;
+  text?: string;
+  createdAt: number;
+  ownerId?: string;
+}
+
+export interface ReadingProject {
+  id: string;
+  name: string;
+  topic: string;
+  sourceIds: string[];
+  extractedText: string;
+  vocabIds: string[];
+  createdAt: number;
+  updatedAt: number;
+  lastExtractedAt?: number;
+  lastVocabExtractedAt?: number;
+  lastStudiedAt?: number;
+  ownerId?: string;
+}
+
+export interface ReadingVocabPayload {
+  word: string;
+  ipa?: string;
+  wordType?: string;
+  meaning?: string;
+  definition?: string;
+  example?: string;
+  synonyms?: string;
+  antonyms?: string;
+  band?: string;
+  topic?: string;
+  sourceSentence?: string;
+  sourceParagraph?: string;
 }
 
 export interface QuizSession {

@@ -1,4 +1,4 @@
-import { VocabItem, UserSettings, QuizSession, CollocationItem } from "../types";
+import { VocabItem, UserSettings, QuizSession, CollocationItem, ReadingProject, ReadingSource } from "../types";
 import { db, auth } from "./firebase";
 import { collection, doc, getDocs, setDoc, writeBatch } from "firebase/firestore";
 
@@ -7,6 +7,8 @@ const DEFAULT_SETTINGS: UserSettings = {
   defaultQuestions: 10,
   defaultCriteria: ['Meaning', 'Word Type', 'Synonyms'],
   defaultCollocationsSeeded: false,
+  crimeCollocationsSeeded: false,
+  crimeCollocationsSeedVersion: 0,
 };
 const LOCAL_API_KEY_STORAGE_KEY = 'uyenuyen-gemini-api-key';
 
@@ -168,6 +170,30 @@ export const saveCollocationItems = async (items: CollocationItem[]) => {
 
 export const deleteCollocationItems = async (itemIds: string[]) => {
   await deleteUserCollectionRecords('collocations', itemIds);
+};
+
+export const getReadingProjects = async (): Promise<ReadingProject[]> => {
+  return getUserCollection<ReadingProject>('readingProjects');
+};
+
+export const saveReadingProjects = async (projects: ReadingProject[]) => {
+  await saveUserCollection('readingProjects', projects);
+};
+
+export const deleteReadingProjects = async (projectIds: string[]) => {
+  await deleteUserCollectionRecords('readingProjects', projectIds);
+};
+
+export const getReadingSources = async (): Promise<ReadingSource[]> => {
+  return getUserCollection<ReadingSource>('readingSources');
+};
+
+export const saveReadingSources = async (sources: ReadingSource[]) => {
+  await saveUserCollection('readingSources', sources);
+};
+
+export const deleteReadingSources = async (sourceIds: string[]) => {
+  await deleteUserCollectionRecords('readingSources', sourceIds);
 };
 
 export const getSettings = async (): Promise<UserSettings> => {

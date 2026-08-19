@@ -12,7 +12,7 @@ import VocabList from './components/VocabList';
 import Collocations from './components/Collocations';
 import CrimeCollocations from './components/CrimeCollocations';
 import ReadingProjects from './components/ReadingProjects';
-import Practice from './components/Practice';
+import PracticeGate from './components/PracticeGate';
 import MonthlyReview from './components/MonthlyReview';
 import Settings from './components/Settings';
 import { Sparkles, LogIn, Menu, Copy, ExternalLink } from 'lucide-react';
@@ -121,27 +121,16 @@ export default function App() {
             </div>
           )}
 
-          {loginError && (
-            <p className="text-sm text-red-500 bg-red-50 border border-red-100 rounded-2xl px-4 py-3 mb-5 font-medium w-full">
-              {loginError}
-            </p>
-          )}
+          {loginError && <p className="text-sm text-red-500 bg-red-50 border border-red-100 rounded-2xl px-4 py-3 mb-5 font-medium w-full">{loginError}</p>}
 
           {isEmbeddedBrowser ? (
             <div className="w-full space-y-3">
-              <button onClick={handleCopyLink} className="flex items-center justify-center gap-3 w-full px-6 py-4 bg-[#A5D6A7] hover:bg-[#81C784] text-[#2D5A27] font-bold rounded-2xl shadow-sm transition-colors active:scale-95">
-                <Copy size={20} />
-                {copiedLink ? 'Đã copy link!' : 'Copy link để mở bằng Safari/Chrome'}
-              </button>
-              <a href={APP_URL} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-3 w-full px-6 py-4 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold rounded-2xl shadow-sm transition-colors active:scale-95">
-                <ExternalLink size={20} /> Thử mở tab mới
-              </a>
+              <button onClick={handleCopyLink} className="flex items-center justify-center gap-3 w-full px-6 py-4 bg-[#A5D6A7] hover:bg-[#81C784] text-[#2D5A27] font-bold rounded-2xl shadow-sm transition-colors active:scale-95"><Copy size={20} />{copiedLink ? 'Đã copy link!' : 'Copy link để mở bằng Safari/Chrome'}</button>
+              <a href={APP_URL} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-3 w-full px-6 py-4 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold rounded-2xl shadow-sm transition-colors active:scale-95"><ExternalLink size={20} /> Thử mở tab mới</a>
               <p className="text-xs text-gray-400 font-semibold break-all">{APP_URL}</p>
             </div>
           ) : (
-            <button onClick={handleLogin} className="flex items-center justify-center gap-3 w-full px-6 py-4 bg-pink-500 hover:bg-pink-600 text-white font-bold rounded-2xl shadow-sm transition-colors active:scale-95">
-              <LogIn size={20} /> Đăng nhập bằng Google
-            </button>
+            <button onClick={handleLogin} className="flex items-center justify-center gap-3 w-full px-6 py-4 bg-pink-500 hover:bg-pink-600 text-white font-bold rounded-2xl shadow-sm transition-colors active:scale-95"><LogIn size={20} /> Đăng nhập bằng Google</button>
           )}
         </div>
       </div>
@@ -153,17 +142,11 @@ export default function App() {
       <div className="flex h-[100dvh] bg-[#FAF9F6] text-gray-800 font-sans overflow-hidden relative">
         {showGreeting && (
           <div className="absolute top-20 lg:top-10 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-10 fade-in duration-500 w-[calc(100%-2rem)] max-w-md lg:w-auto lg:max-w-none">
-            <div className="bg-white px-5 lg:px-8 py-3 lg:py-4 rounded-full shadow-lg border-2 border-pink-200 flex items-center justify-center gap-3 text-center">
-              <Sparkles className="text-pink-400 shrink-0" size={22} />
-              <span className="text-pink-500 font-extrabold text-sm lg:text-lg">Chúc bạn học bài tốt!</span>
-            </div>
+            <div className="bg-white px-5 lg:px-8 py-3 lg:py-4 rounded-full shadow-lg border-2 border-pink-200 flex items-center justify-center gap-3 text-center"><Sparkles className="text-pink-400 shrink-0" size={22} /><span className="text-pink-500 font-extrabold text-sm lg:text-lg">Chúc bạn học bài tốt!</span></div>
           </div>
         )}
 
-        <button aria-label="Mở menu" onClick={() => setIsMobileMenuOpen(true)} className="fixed top-4 left-4 z-40 lg:hidden w-12 h-12 rounded-2xl bg-white text-[#2D5A27] border border-[#D0E8D0] shadow-lg flex items-center justify-center active:scale-95">
-          <Menu size={24} />
-        </button>
-
+        <button aria-label="Mở menu" onClick={() => setIsMobileMenuOpen(true)} className="fixed top-4 left-4 z-40 lg:hidden w-12 h-12 rounded-2xl bg-white text-[#2D5A27] border border-[#D0E8D0] shadow-lg flex items-center justify-center active:scale-95"><Menu size={24} /></button>
         <Sidebar currentView={currentView} setCurrentView={setCurrentView} isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
 
         <main className="flex-1 overflow-y-auto p-4 pt-20 lg:p-8 min-w-0">
@@ -174,7 +157,7 @@ export default function App() {
             <div className={currentView === 'collocations' ? 'block' : 'hidden'}><Collocations setCurrentView={setCurrentView} /></div>
             <div className={currentView === 'crime-collocations' ? 'block' : 'hidden'}><CrimeCollocations setCurrentView={setCurrentView} /></div>
             <div className={currentView === 'reading-projects' ? 'block' : 'hidden'}><ReadingProjects setCurrentView={setCurrentView} /></div>
-            <div className={currentView === 'practice' ? 'block' : 'hidden'}><Practice currentView={currentView} /></div>
+            <div className={currentView === 'practice' ? 'block' : 'hidden'}><PracticeGate currentView={currentView} /></div>
             <div className={currentView === 'monthly-review' ? 'block' : 'hidden'}><MonthlyReview /></div>
             <div className={currentView === 'settings' ? 'block' : 'hidden'}><Settings /></div>
           </div>

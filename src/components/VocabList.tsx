@@ -183,9 +183,12 @@ export default function VocabList() {
   };
 
   const playAudio = (text: string) => {
-    if (!('speechSynthesis' in window)) return;
-    const message = new SpeechSynthesisUtterance(text);
+    const value = text.trim();
+    if (!value || !('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const message = new SpeechSynthesisUtterance(value);
     message.lang = 'en-US';
+    message.rate = 0.9;
     window.speechSynthesis.speak(message);
   };
 
@@ -230,9 +233,30 @@ export default function VocabList() {
     });
   };
 
-  const renderFields = (data: Partial<VocabItem>, setData: (next: Partial<VocabItem>) => void) => (
+  const renderFields = (
+    data: Partial<VocabItem>,
+    setData: (next: Partial<VocabItem>) => void,
+    pronunciationText: string,
+  ) => (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <input value={data.ipa || ''} onChange={event => setData({ ...data, ipa: event.target.value })} placeholder="IPA" className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl" />
+      <div className="relative">
+        <input
+          value={data.ipa || ''}
+          onChange={event => setData({ ...data, ipa: event.target.value })}
+          placeholder="IPA"
+          className="w-full pl-4 pr-14 py-3 bg-gray-50 border border-gray-200 rounded-xl"
+        />
+        <button
+          type="button"
+          aria-label={`Phát âm ${pronunciationText || 'từ vựng'}`}
+          title="Nghe phát âm"
+          onClick={() => playAudio(pronunciationText)}
+          disabled={!pronunciationText.trim()}
+          className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-lg flex items-center justify-center bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        >
+          <Volume2 size={18} />
+        </button>
+      </div>
       <input value={data.wordType || ''} onChange={event => setData({ ...data, wordType: event.target.value })} placeholder="Type" className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl" />
       <input value={data.meaning || ''} onChange={event => setData({ ...data, meaning: event.target.value })} placeholder="Meaning (VN)" className="sm:col-span-2 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-semibold" />
       <textarea value={data.definition || ''} onChange={event => setData({ ...data, definition: event.target.value })} placeholder="Definition (EN)" rows={2} className="sm:col-span-2 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl" />
@@ -314,11 +338,11 @@ export default function VocabList() {
       {filteredItems.length === 0 && <div className="rounded-[2rem] border-2 border-dashed border-gray-200 bg-gray-50 py-14 text-center text-gray-400 font-bold">Không có vocab phù hợp.</div>}
 
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"><div className="bg-white rounded-[2rem] w-full max-w-2xl max-h-[90dvh] overflow-y-auto card-shadow"><div className="p-6 border-b border-gray-100 flex items-center justify-between"><h3 className="text-2xl font-black">Add Word</h3><button onClick={resetAddModal}><X /></button></div><div className="p-6 space-y-4"><div className="flex gap-3"><input value={newWord} onChange={event => { setNewWord(event.target.value); setDuplicateMessage(''); }} placeholder="Word or collocation" className="flex-1 px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 font-bold" /><button onClick={handleAutoDefine} disabled={isDefining || !newWord.trim()} className="flex items-center gap-2 px-4 py-3 rounded-xl bg-blue-600 text-white font-bold disabled:opacity-50"><Wand2 size={18} /> {isDefining ? 'Defining...' : 'Auto Define'}</button></div>{duplicateMessage && <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3 text-sm font-bold text-amber-700">{duplicateMessage}</div>}{renderFields(formData, setFormData)}</div><div className="p-6 border-t border-gray-100 flex justify-end gap-3"><button onClick={resetAddModal} className="px-5 py-3 rounded-xl bg-gray-100 font-bold text-gray-500">Cancel</button><button onClick={handleSave} className="flex items-center gap-2 px-5 py-3 rounded-xl bg-[#A5D6A7] text-[#2D5A27] font-bold"><Save size={17} /> Save</button></div></div></div>
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"><div className="bg-white rounded-[2rem] w-full max-w-2xl max-h-[90dvh] overflow-y-auto card-shadow"><div className="p-6 border-b border-gray-100 flex items-center justify-between"><h3 className="text-2xl font-black">Add Word</h3><button onClick={resetAddModal}><X /></button></div><div className="p-6 space-y-4"><div className="flex gap-3"><input value={newWord} onChange={event => { setNewWord(event.target.value); setDuplicateMessage(''); }} placeholder="Word or collocation" className="flex-1 px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 font-bold" /><button onClick={handleAutoDefine} disabled={isDefining || !newWord.trim()} className="flex items-center gap-2 px-4 py-3 rounded-xl bg-blue-600 text-white font-bold disabled:opacity-50"><Wand2 size={18} /> {isDefining ? 'Defining...' : 'Auto Define'}</button></div>{duplicateMessage && <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3 text-sm font-bold text-amber-700">{duplicateMessage}</div>}{renderFields(formData, setFormData, newWord)}</div><div className="p-6 border-t border-gray-100 flex justify-end gap-3"><button onClick={resetAddModal} className="px-5 py-3 rounded-xl bg-gray-100 font-bold text-gray-500">Cancel</button><button onClick={handleSave} className="flex items-center gap-2 px-5 py-3 rounded-xl bg-[#A5D6A7] text-[#2D5A27] font-bold"><Save size={17} /> Save</button></div></div></div>
       )}
 
       {editingItem && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"><div className="bg-white rounded-[2rem] w-full max-w-2xl max-h-[90dvh] overflow-y-auto card-shadow"><div className="p-6 border-b border-gray-100 flex items-center justify-between"><h3 className="text-2xl font-black">Edit Word</h3><button onClick={closeEdit}><X /></button></div><div className="p-6 space-y-4"><input value={editData.word || ''} onChange={event => setEditData({ ...editData, word: event.target.value })} className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 font-bold" />{editMessage && <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm font-bold text-red-600">{editMessage}</div>}{renderFields(editData, setEditData)}</div><div className="p-6 border-t border-gray-100 flex justify-end gap-3"><button onClick={closeEdit} className="px-5 py-3 rounded-xl bg-gray-100 font-bold text-gray-500">Cancel</button><button onClick={handleUpdate} className="flex items-center gap-2 px-5 py-3 rounded-xl bg-[#A5D6A7] text-[#2D5A27] font-bold"><Save size={17} /> Save Changes</button></div></div></div>
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"><div className="bg-white rounded-[2rem] w-full max-w-2xl max-h-[90dvh] overflow-y-auto card-shadow"><div className="p-6 border-b border-gray-100 flex items-center justify-between"><h3 className="text-2xl font-black">Edit Word</h3><button onClick={closeEdit}><X /></button></div><div className="p-6 space-y-4"><input value={editData.word || ''} onChange={event => setEditData({ ...editData, word: event.target.value })} className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 font-bold" />{editMessage && <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm font-bold text-red-600">{editMessage}</div>}{renderFields(editData, setEditData, String(editData.word || ''))}</div><div className="p-6 border-t border-gray-100 flex justify-end gap-3"><button onClick={closeEdit} className="px-5 py-3 rounded-xl bg-gray-100 font-bold text-gray-500">Cancel</button><button onClick={handleUpdate} className="flex items-center gap-2 px-5 py-3 rounded-xl bg-[#A5D6A7] text-[#2D5A27] font-bold"><Save size={17} /> Save Changes</button></div></div></div>
       )}
     </div>
   );

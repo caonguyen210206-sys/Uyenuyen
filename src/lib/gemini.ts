@@ -3,10 +3,10 @@ import { normalizeBand, normalizeWord } from './vocabUtils';
 
 // Free-tier friendly: use only light models and do not burn quota by trying many paid/heavy models.
 const MODEL_CANDIDATES = [
-  "gemini-3.1-flash-lite",
-  "gemini-2.5-flash-lite",
+  'gemini-3.1-flash-lite',
+  'gemini-2.5-flash-lite',
 ];
-const CACHE_VERSION = "v10";
+const CACHE_VERSION = 'v11';
 
 type VocabPayload = {
   correctedWord?: string;
@@ -23,6 +23,12 @@ type VocabPayload = {
   miniQuiz?: MiniQuiz;
 };
 
+type GeminiError = Error & {
+  status?: number;
+  model?: string;
+  network?: boolean;
+};
+
 const BAND_GUIDE = `Band estimates IELTS vocabulary difficulty, not essay score.
 Very common daily words such as apple, school, book, happy, big, good => "Basic".
 IELTS-level words only use: "5.0", "5.5", "6.0", "6.5", "7.0", "7.5", "8.0", "8.5", "9.0".
@@ -30,7 +36,7 @@ B1 useful words: 5.0-5.5. B2 words: 6.0-6.5. C1-C2/academic/formal words: 7.0-9.
 
 function requireApiKey(apiKey?: string) {
   if (!apiKey?.trim()) {
-    throw new Error("Vui lòng vào Settings nhập Gemini API Key rồi bấm Save Settings.");
+    throw new Error('Vui lòng vào Settings nhập Gemini API Key rồi bấm Save Settings.');
   }
   return apiKey.trim();
 }
@@ -38,9 +44,9 @@ function requireApiKey(apiKey?: string) {
 function parseJsonResponse(text: string) {
   const cleaned = text
     .trim()
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/\s*```$/i, "")
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/i, '')
     .trim();
 
   return JSON.parse(cleaned);
@@ -115,24 +121,13 @@ function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function extractInteractionText(payload: any) {
-  if (typeof payload?.output_text === "string") {
-    return payload.output_text;
-  }
-
-  const steps = Array.isArray(payload?.steps) ? payload.steps : [];
-  for (let i = steps.length - 1; i >= 0; i--) {
-    const content = steps[i]?.content;
-    if (!Array.isArray(content)) continue;
-    const textParts = content
-      .map((part: any) => part?.text)
-      .filter((text: unknown) => typeof text === "string");
-    if (textParts.length > 0) {
-      return textParts.join("\n");
-    }
-  }
-
-  return "";
+function extractGenerateContentText(payload: any) {
+  const parts = payload?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return '';
+  return parts
+    .map((part: any) => part?.text)
+    .filter((text: unknown) => typeof text === 'string')
+    .join('\n');
 }
 
 function isQuotaMessage(message: string) {
@@ -162,31 +157,55 @@ function buildQuotaError() {
   );
 }
 
+function buildNetworkError() {
+  return new Error(
+    'Không kết nối được tới Gemini API từ trình duyệt. Hãy kiểm tra mạng, thử tắt VPN/ad-block nếu có, rồi tải lại trang và thử lại. Đây là lỗi kết nối (Failed to fetch), không phải thông báo hết quota.'
+  );
+}
+
 async function callGeminiModel(apiKey: string, model: string, prompt: string) {
-  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey,
-    },
-    body: JSON.stringify({
-      model,
-      store: false,
-      input: `${prompt}\n\n${BAND_GUIDE}\nReturn JSON only. Keep values concise but complete.`,
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: `${prompt}\n\n${BAND_GUIDE}\nReturn JSON only. No markdown. Keep values concise but complete.`,
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.1,
+        },
+      }),
+    });
+  } catch (error: any) {
+    const networkError = new Error(String(error?.message || 'Failed to fetch')) as GeminiError;
+    networkError.model = model;
+    networkError.network = true;
+    throw networkError;
+  }
 
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
     const message = payload?.error?.message || `Gemini API lỗi HTTP ${response.status}.`;
-    const error = new Error(message) as Error & { status?: number; model?: string };
+    const error = new Error(message) as GeminiError;
     error.status = response.status;
     error.model = model;
     throw error;
   }
 
-  const text = extractInteractionText(payload);
+  const text = extractGenerateContentText(payload);
   if (!text) {
     throw new Error(`${model} không trả về dữ liệu.`);
   }
@@ -202,10 +221,11 @@ async function generateJson(apiKey: string | undefined, prompt: string, cacheId?
 
   const key = requireApiKey(apiKey);
   const failedModels: string[] = [];
+  let networkFailures = 0;
 
   for (let attempt = 0; attempt < MODEL_CANDIDATES.length; attempt++) {
     const model = MODEL_CANDIDATES[attempt];
-    if (attempt > 0) await delay(350);
+    if (attempt > 0) await delay(500);
 
     try {
       const parsed = await callGeminiModel(key, model, prompt);
@@ -214,7 +234,14 @@ async function generateJson(apiKey: string | undefined, prompt: string, cacheId?
     } catch (err: any) {
       const status = Number(err?.status || 0);
       const message = String(err?.message || 'Gemini API chưa phản hồi.');
+      const isNetworkFailure = Boolean(err?.network) || /failed to fetch|networkerror|load failed/i.test(message);
       failedModels.push(`${model}: ${message}`);
+
+      if (isNetworkFailure) {
+        networkFailures += 1;
+        if (attempt < MODEL_CANDIDATES.length - 1) continue;
+        break;
+      }
 
       if (status === 401 || status === 403) {
         throw new Error('Gemini API Key không hợp lệ hoặc chưa có quyền dùng model này. Hãy kiểm tra lại key trong Settings.');
@@ -232,6 +259,10 @@ async function generateJson(apiKey: string | undefined, prompt: string, cacheId?
         continue;
       }
     }
+  }
+
+  if (networkFailures === MODEL_CANDIDATES.length) {
+    throw buildNetworkError();
   }
 
   throw new Error(`Gemini đang bận hoặc model nhẹ chưa khả dụng. App chỉ thử model nhẹ để tiết kiệm free quota. Chi tiết: ${failedModels.slice(-2).join(' | ')}`);
@@ -282,5 +313,6 @@ Paragraph: ${paragraph}`;
 }
 
 export async function testGeminiConnection(apiKey?: string) {
-  await defineWord("hello", apiKey);
+  const prompt = `Return one JSON object with exactly this field: ok. Set ok to true.`;
+  await generateJson(apiKey, prompt);
 }

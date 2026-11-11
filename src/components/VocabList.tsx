@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Eye, EyeOff, Pencil, Plus, Save, Sparkles, Trash2, Volume2, Wand2, X } from 'lucide-react';
 import { VocabItem } from '../types';
 import { useVocab } from '../context/VocabContext';
@@ -20,6 +20,8 @@ export default function VocabList() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newWord, setNewWord] = useState('');
   const [isDefining, setIsDefining] = useState(false);
+  const [defineError, setDefineError] = useState('');
+  const activeDefineRequest = useRef<symbol | null>(null);
   const [wasAutoDefined, setWasAutoDefined] = useState(false);
   const [formData, setFormData] = useState<Partial<VocabItem>>({});
   const [duplicateMessage, setDuplicateMessage] = useState('');
@@ -70,6 +72,9 @@ export default function VocabList() {
   };
 
   const resetAddModal = () => {
+    activeDefineRequest.current = null;
+    setIsDefining(false);
+    setDefineError('');
     setShowAddModal(false);
     setNewWord('');
     setFormData({});
@@ -79,29 +84,37 @@ export default function VocabList() {
 
   const handleAutoDefine = async () => {
     const word = newWord.trim();
-    if (!word) return;
+    if (!word || activeDefineRequest.current) return;
+    setDefineError('');
     const duplicate = findDuplicate(word);
     if (duplicate) {
       setDuplicateMessage(`Từ/cụm "${duplicate.word}" đã có trong danh sách rồi.`);
       return;
     }
     setDuplicateMessage('');
+    const request = Symbol();
+    activeDefineRequest.current = request;
     setIsDefining(true);
     try {
       const data = await defineWord(word, settings.apiKey);
+      if (activeDefineRequest.current !== request) return;
       const finalWord = data.correctedWord?.trim() || word;
       const correctedDuplicate = findDuplicate(finalWord);
       if (correctedDuplicate) {
-        setNewWord(finalWord);
         setDuplicateMessage(`Từ/cụm "${correctedDuplicate.word}" đã tồn tại, không lưu thêm bản trùng.`);
       }
       setNewWord(finalWord);
       setFormData({ ...data, band: normalizeBand(data.band) });
       setWasAutoDefined(true);
-    } catch (error: any) {
-      alert(error?.message || 'Auto Define chưa thành công.');
+    } catch (error) {
+      if (activeDefineRequest.current === request) {
+        setDefineError(error instanceof Error ? error.message : 'Auto Define chưa thành công.');
+      }
     } finally {
-      setIsDefining(false);
+      if (activeDefineRequest.current === request) {
+        activeDefineRequest.current = null;
+        setIsDefining(false);
+      }
     }
   };
 
@@ -338,7 +351,39 @@ export default function VocabList() {
       {filteredItems.length === 0 && <div className="rounded-[2rem] border-2 border-dashed border-gray-200 bg-gray-50 py-14 text-center text-gray-400 font-bold">Không có vocab phù hợp.</div>}
 
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"><div className="bg-white rounded-[2rem] w-full max-w-2xl max-h-[90dvh] overflow-y-auto card-shadow"><div className="p-6 border-b border-gray-100 flex items-center justify-between"><h3 className="text-2xl font-black">Add Word</h3><button onClick={resetAddModal}><X /></button></div><div className="p-6 space-y-4"><div className="flex gap-3"><input value={newWord} onChange={event => { setNewWord(event.target.value); setDuplicateMessage(''); }} placeholder="Word or collocation" className="flex-1 px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 font-bold" /><button onClick={handleAutoDefine} disabled={isDefining || !newWord.trim()} className="flex items-center gap-2 px-4 py-3 rounded-xl bg-blue-600 text-white font-bold disabled:opacity-50"><Wand2 size={18} /> {isDefining ? 'Defining...' : 'Auto Define'}</button></div>{duplicateMessage && <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3 text-sm font-bold text-amber-700">{duplicateMessage}</div>}{renderFields(formData, setFormData, newWord)}</div><div className="p-6 border-t border-gray-100 flex justify-end gap-3"><button onClick={resetAddModal} className="px-5 py-3 rounded-xl bg-gray-100 font-bold text-gray-500">Cancel</button><button onClick={handleSave} className="flex items-center gap-2 px-5 py-3 rounded-xl bg-[#A5D6A7] text-[#2D5A27] font-bold"><Save size={17} /> Save</button></div></div></div>
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] w-full max-w-2xl max-h-[90dvh] overflow-y-auto card-shadow">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-2xl font-black">Add Word</h3>
+              <button onClick={resetAddModal} aria-label="Close Add Word"><X /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex gap-3">
+                <input
+                  value={newWord}
+                  disabled={isDefining}
+                  onChange={event => {
+                    setNewWord(event.target.value);
+                    setDuplicateMessage('');
+                    setDefineError('');
+                  }}
+                  placeholder="Word or collocation"
+                  className="flex-1 px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 font-bold"
+                />
+                <button onClick={handleAutoDefine} disabled={isDefining || !newWord.trim()} className="flex items-center gap-2 px-4 py-3 rounded-xl bg-blue-600 text-white font-bold disabled:opacity-50">
+                  <Wand2 size={18} /> {isDefining ? 'Defining...' : 'Auto Define'}
+                </button>
+              </div>
+              {defineError && <div role="alert" className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm font-bold text-red-600">{defineError}</div>}
+              {duplicateMessage && <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3 text-sm font-bold text-amber-700">{duplicateMessage}</div>}
+              {renderFields(formData, setFormData, newWord)}
+            </div>
+            <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
+              <button onClick={resetAddModal} className="px-5 py-3 rounded-xl bg-gray-100 font-bold text-gray-500">Cancel</button>
+              <button onClick={handleSave} disabled={isDefining} className="flex items-center gap-2 px-5 py-3 rounded-xl bg-[#A5D6A7] text-[#2D5A27] font-bold disabled:opacity-50"><Save size={17} /> Save</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {editingItem && (

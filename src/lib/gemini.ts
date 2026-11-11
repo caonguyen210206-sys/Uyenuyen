@@ -1,11 +1,7 @@
 import type { MiniQuiz, VocabItem } from '../types';
+import { GEMINI_FLASH_LITE_MODELS, isGeminiKeyError, isGeminiQuotaError } from './geminiModels';
 import { normalizeBand, normalizeWord } from './vocabUtils';
 
-// Free-tier friendly: use only light models and do not burn quota by trying many paid/heavy models.
-const MODEL_CANDIDATES = [
-  'gemini-3.1-flash-lite',
-  'gemini-2.5-flash-lite',
-];
 const CACHE_VERSION = 'v11';
 
 type VocabPayload = {
@@ -25,7 +21,6 @@ type VocabPayload = {
 
 type GeminiError = Error & {
   status?: number;
-  model?: string;
   network?: boolean;
 };
 
@@ -125,41 +120,21 @@ function extractGenerateContentText(payload: any) {
   const parts = payload?.candidates?.[0]?.content?.parts;
   if (!Array.isArray(parts)) return '';
   return parts
+    .filter(part => !part?.thought)
     .map((part: any) => part?.text)
     .filter((text: unknown) => typeof text === 'string')
     .join('\n');
 }
 
-function isQuotaMessage(message: string) {
-  const lower = message.toLowerCase();
-  return lower.includes('quota')
-    || lower.includes('rate limit')
-    || lower.includes('resource_exhausted')
-    || lower.includes('free_tier')
-    || lower.includes('exceeded');
-}
-
-function shouldTryNextModel(status: number, message: string) {
-  const lower = message.toLowerCase();
-  if (isQuotaMessage(message)) return false;
-  return [400, 404, 503].includes(status)
-    || lower.includes('high demand')
-    || lower.includes('overloaded')
-    || lower.includes('temporarily')
-    || lower.includes('not found')
-    || lower.includes('unsupported')
-    || lower.includes('unavailable');
-}
-
 function buildQuotaError() {
   return new Error(
-    'Gemini API key đã hết quota free tier trong project hiện tại. Để tránh hao quota thêm, app đã dừng retry. Bạn có thể nhập tay, đợi quota reset, dùng batch import ít hơn, hoặc bật billing cho project API trong Google AI Studio.'
+    'Gemini đã chạm giới hạn sử dụng. Bạn có thể thử lại sau hoặc nhập từ thủ công.'
   );
 }
 
 function buildNetworkError() {
   return new Error(
-    'Không kết nối được tới Gemini API từ trình duyệt. Hãy kiểm tra mạng, thử tắt VPN/ad-block nếu có, rồi tải lại trang và thử lại. Đây là lỗi kết nối (Failed to fetch), không phải thông báo hết quota.'
+    'Không kết nối được với Gemini. Hãy kiểm tra mạng rồi thử lại.'
   );
 }
 
@@ -184,13 +159,12 @@ async function callGeminiModel(apiKey: string, model: string, prompt: string) {
           },
         ],
         generationConfig: {
-          temperature: 0.1,
+          responseMimeType: 'application/json',
         },
       }),
     });
   } catch (error: any) {
     const networkError = new Error(String(error?.message || 'Failed to fetch')) as GeminiError;
-    networkError.model = model;
     networkError.network = true;
     throw networkError;
   }
@@ -201,7 +175,6 @@ async function callGeminiModel(apiKey: string, model: string, prompt: string) {
     const message = payload?.error?.message || `Gemini API lỗi HTTP ${response.status}.`;
     const error = new Error(message) as GeminiError;
     error.status = response.status;
-    error.model = model;
     throw error;
   }
 
@@ -220,52 +193,37 @@ async function generateJson(apiKey: string | undefined, prompt: string, cacheId?
   }
 
   const key = requireApiKey(apiKey);
-  const failedModels: string[] = [];
   let networkFailures = 0;
 
-  for (let attempt = 0; attempt < MODEL_CANDIDATES.length; attempt++) {
-    const model = MODEL_CANDIDATES[attempt];
+  for (const [attempt, model] of GEMINI_FLASH_LITE_MODELS.entries()) {
     if (attempt > 0) await delay(500);
 
     try {
       const parsed = await callGeminiModel(key, model, prompt);
       if (cacheId) writeCache(cacheId, parsed);
       return parsed;
-    } catch (err: any) {
-      const status = Number(err?.status || 0);
-      const message = String(err?.message || 'Gemini API chưa phản hồi.');
-      const isNetworkFailure = Boolean(err?.network) || /failed to fetch|networkerror|load failed/i.test(message);
-      failedModels.push(`${model}: ${message}`);
-
-      if (isNetworkFailure) {
+    } catch (error) {
+      const err = error as GeminiError;
+      const status = err.status ?? 0;
+      if (err.network) {
         networkFailures += 1;
-        if (attempt < MODEL_CANDIDATES.length - 1) continue;
-        break;
       }
 
-      if (status === 401 || status === 403) {
+      if (isGeminiKeyError(status, err.message)) {
         throw new Error('Gemini API Key không hợp lệ hoặc chưa có quyền dùng model này. Hãy kiểm tra lại key trong Settings.');
       }
 
-      if (isQuotaMessage(message)) {
+      if (isGeminiQuotaError(status, err.message)) {
         throw buildQuotaError();
-      }
-
-      if (attempt < MODEL_CANDIDATES.length - 1 && shouldTryNextModel(status, message)) {
-        continue;
-      }
-
-      if (attempt < MODEL_CANDIDATES.length - 1) {
-        continue;
       }
     }
   }
 
-  if (networkFailures === MODEL_CANDIDATES.length) {
+  if (networkFailures === GEMINI_FLASH_LITE_MODELS.length) {
     throw buildNetworkError();
   }
 
-  throw new Error(`Gemini đang bận hoặc model nhẹ chưa khả dụng. App chỉ thử model nhẹ để tiết kiệm free quota. Chi tiết: ${failedModels.slice(-2).join(' | ')}`);
+  throw new Error('Gemini đang bận hoặc chưa phản hồi. Bạn có thể thử lại sau hoặc nhập từ thủ công.');
 }
 
 export async function defineWord(word: string, apiKey?: string): Promise<VocabPayload> {

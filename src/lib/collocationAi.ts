@@ -1,11 +1,6 @@
 import type { CollocationItem } from '../types';
+import { GEMINI_FLASH_LITE_MODELS, isGeminiKeyError, isGeminiQuotaError } from './geminiModels';
 import { normalizeBand, normalizeWord } from './vocabUtils';
-
-// Free-tier friendly: collocation import is often heavier than word define, so use only light models.
-const MODEL_CANDIDATES = [
-  'gemini-3.1-flash-lite',
-  'gemini-2.5-flash-lite',
-];
 
 const BAND_GUIDE = `Band estimates IELTS collocation difficulty, not essay score.
 Use "Basic" only for very simple daily collocations.
@@ -45,27 +40,6 @@ function extractGenerateContentText(payload: any) {
     .map((part: any) => part?.text)
     .filter((text: unknown) => typeof text === 'string')
     .join('\n');
-}
-
-function isQuotaMessage(message: string) {
-  const lower = message.toLowerCase();
-  return lower.includes('quota')
-    || lower.includes('rate limit')
-    || lower.includes('resource_exhausted')
-    || lower.includes('free_tier')
-    || lower.includes('exceeded');
-}
-
-function shouldTryNextModel(status: number, message: string) {
-  const lower = message.toLowerCase();
-  if (isQuotaMessage(message)) return false;
-  return [400, 404, 503].includes(status)
-    || lower.includes('high demand')
-    || lower.includes('overloaded')
-    || lower.includes('temporarily')
-    || lower.includes('not found')
-    || lower.includes('unsupported')
-    || lower.includes('unavailable');
 }
 
 function normalizeCollocation(item: CollocationPayload): CollocationPayload | null {
@@ -219,8 +193,7 @@ async function generateJson(apiKey: string | undefined, prompt: string, image?: 
   const key = requireApiKey(apiKey);
   let lastMessage = '';
 
-  for (let attempt = 0; attempt < MODEL_CANDIDATES.length; attempt++) {
-    const model = MODEL_CANDIDATES[attempt];
+  for (const [attempt, model] of GEMINI_FLASH_LITE_MODELS.entries()) {
     if (attempt > 0) await delay(350);
 
     try {
@@ -230,20 +203,12 @@ async function generateJson(apiKey: string | undefined, prompt: string, image?: 
       const message = String(err?.message || 'Gemini API chưa phản hồi.');
       lastMessage = `${model}: ${message}`;
 
-      if (status === 401 || status === 403) {
+      if (isGeminiKeyError(status, message)) {
         throw new Error('Gemini API Key không hợp lệ hoặc chưa có quyền dùng model này. Hãy kiểm tra lại key trong Settings.');
       }
 
-      if (isQuotaMessage(message)) {
+      if (isGeminiQuotaError(status, message)) {
         throw buildQuotaError();
-      }
-
-      if (attempt < MODEL_CANDIDATES.length - 1 && shouldTryNextModel(status, message)) {
-        continue;
-      }
-
-      if (attempt < MODEL_CANDIDATES.length - 1) {
-        continue;
       }
     }
   }

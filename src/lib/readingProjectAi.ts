@@ -1,7 +1,6 @@
 import { ReadingSource, ReadingVocabPayload } from '../types';
+import { GEMINI_FLASH_LITE_MODELS, isGeminiKeyError, isGeminiQuotaError } from './geminiModels';
 import { normalizeBand } from './vocabUtils';
-
-const MODEL_CANDIDATES = ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite'];
 
 function requireApiKey(apiKey?: string) {
   const key = apiKey?.trim();
@@ -25,27 +24,6 @@ function extractText(payload: any) {
   return parts.map((part: any) => part?.text).filter((value: unknown) => typeof value === 'string').join('\n');
 }
 
-function isQuotaMessage(message: string) {
-  const lower = message.toLowerCase();
-  return lower.includes('quota')
-    || lower.includes('rate limit')
-    || lower.includes('resource_exhausted')
-    || lower.includes('free_tier')
-    || lower.includes('exceeded');
-}
-
-function shouldTryNextModel(status: number, message: string) {
-  if (isQuotaMessage(message)) return false;
-  const lower = message.toLowerCase();
-  return [400, 404, 503].includes(status)
-    || lower.includes('high demand')
-    || lower.includes('overloaded')
-    || lower.includes('temporarily')
-    || lower.includes('not found')
-    || lower.includes('unsupported')
-    || lower.includes('unavailable');
-}
-
 async function generateContent(apiKey: string | undefined, textPrompt: string, sources: ReadingSource[] = [], maxOutputTokens = 8192) {
   const key = requireApiKey(apiKey);
   const parts: any[] = [{ text: textPrompt }];
@@ -67,10 +45,10 @@ async function generateContent(apiKey: string | undefined, textPrompt: string, s
   });
 
   let lastError = '';
-  for (let index = 0; index < MODEL_CANDIDATES.length; index++) {
-    const model = MODEL_CANDIDATES[index];
+  for (const model of GEMINI_FLASH_LITE_MODELS) {
+    let response: Response;
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -84,31 +62,28 @@ async function generateContent(apiKey: string | undefined, textPrompt: string, s
           },
         }),
       });
-
-      const payload = await response.json().catch(() => null);
-      if (!response.ok) {
-        const message = payload?.error?.message || `Gemini API lỗi HTTP ${response.status}.`;
-        lastError = `${model}: ${message}`;
-        if (response.status === 401 || response.status === 403) {
-          throw new Error('Gemini API Key không hợp lệ hoặc chưa có quyền dùng model này.');
-        }
-        if (isQuotaMessage(message)) {
-          throw new Error('Gemini API đã hết quota free tier. Reading Project đã được lưu; hãy đợi quota reset rồi bấm Extract/Re-extract sau, không cần tạo project lại.');
-        }
-        if (index < MODEL_CANDIDATES.length - 1 && shouldTryNextModel(response.status, message)) continue;
-        throw new Error(message);
-      }
-
-      const output = extractText(payload);
-      if (!output) throw new Error(`${model} không trả về dữ liệu.`);
-      return output;
     } catch (error: any) {
       const message = String(error?.message || 'Gemini API chưa phản hồi.');
       lastError = `${model}: ${message}`;
-      if (message.includes('quota free tier') || message.includes('API Key không hợp lệ')) throw error;
-      if (index < MODEL_CANDIDATES.length - 1) continue;
-      throw new Error(lastError);
+      continue;
     }
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      const message = payload?.error?.message || `Gemini API lỗi HTTP ${response.status}.`;
+      if (isGeminiKeyError(response.status, message)) {
+        throw new Error('Gemini API Key không hợp lệ hoặc chưa có quyền dùng model này.');
+      }
+      if (isGeminiQuotaError(response.status, message)) {
+        throw new Error('Gemini API đã chạm giới hạn sử dụng. Reading Project đã được lưu. Hãy thử lại với Extract/Re-extract sau.');
+      }
+      lastError = `${model}: ${message}`;
+      continue;
+    }
+
+    const output = extractText(payload);
+    if (output) return output;
+    lastError = `${model} không trả về dữ liệu.`;
   }
 
   throw new Error(lastError || 'Không thể xử lý Reading Project.');
